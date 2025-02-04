@@ -166,3 +166,7 @@ robot.motion.motion_file="humanoidverse/data/motions/g1_29dof_anneal_23dof/Taira
 rewards.reward_penalty_curriculum=True \
 env.config.resample_motion_when_training=False
 ```
+
+# License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
