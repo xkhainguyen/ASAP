@@ -148,7 +148,7 @@ pip install -r requirements.txt
 
 # Motion Tracking Training
 
-Train a phase-based motion tracking policy to imitat 
+Train a phase-based motion tracking policy to imitate Cristiano Ronaldo's signature Siuuu move
 
 ```bash
 python humanoidverse/train_agent.py \
