@@ -23,7 +23,7 @@ Learning Agile Humanoid Whole-Body Skills </h1>
 </div>
 
 ## TODO
-- [x] Relaase code backbone
+- [x] Release code backbone
 - [x] Release phase-based motion tracking training pipeline
 - [ ] Release ASAP motion datasets
 - [ ] Release motion retargeting pipeline
