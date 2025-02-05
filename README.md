@@ -6,7 +6,7 @@ Learning Agile Humanoid Whole-Body Skills </h1>
 
 [[Website]](https://agile.human2humanoid.com/)
 [[Arxiv]](https://arxiv.org/pdf/2502.01143)
-[[Video]]()
+[[Video]](https://www.youtube.com/watch?v=tu7LSNYWDTs&ab_channel=LeCARLabatCMU)
 
 <p align="center">
     <img src="imgs/CMU-NV-logo-crop-png.png" height=50"> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
