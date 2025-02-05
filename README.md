@@ -171,7 +171,7 @@ env.config.resample_motion_when_training=False
 If you find our work useful, please consider citing us!
 
 ```bibtex
-@article{he2024asap,
+@article{he2025asap,
   title={ASAP: Aligning Simulation and Real-World Physics for Learning Agile Humanoid Whole-Body Skills},
   author={He, Tairan and Gao, Jiawei and Xiao, Wenli and Zhang, Yuanhang and Wang, Zi and Wang, Jiashun and Luo, Zhengyi and He, Guanqi and Sobanbabu, Nikhil and Pan, Chaoyi and Yi, Zeji and Qu, Guannan and Kitani, Kris and Hodgins, Jessica and Fan, Linxi "Jim" and Zhu, Yuke and Liu, Changliu and Shi, Guanya},
   journal={arXiv preprint arXiv:2502.01143},
