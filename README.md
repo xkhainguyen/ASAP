@@ -85,7 +85,6 @@ Install dependencies:
 ```bash
 pip install -e .
 pip install -e isaac_utils
-pip install -r requirements.txt
 ```
 
 Test with:
@@ -101,8 +100,32 @@ HYDRA_FULL_ERROR=1 python humanoidverse/train_agent.py \
 num_envs=1 \
 project_name=TestIsaacGymInstallation \
 experiment_name=G123dof_loco \
-headless=True
+headless=False
 ```
+<details>
+<summary>Note:</summary>
+This is ONLY for testing, NOT how we train the locomotion policy in the ASAP paper. But still, you can train a locomotion policy by:
+
+```bash
+HYDRA_FULL_ERROR=1 python humanoidverse/train_agent.py \
++simulator=isaacgym \
++exp=locomotion \
++domain_rand=NO_domain_rand \
++rewards=loco/reward_g1_locomotion \
++robot=g1/g1_29dof_anneal_23dof \
++terrain=terrain_locomotion_plane \
++obs=loco/leggedloco_obs_singlestep_withlinvel \
+num_envs=4096 \
+project_name=TestIsaacGymInstallation \
+experiment_name=G123dof_loco \
+headless=True \
+rewards.reward_penalty_curriculum=True \
+rewards.reward_initial_penalty_scale=0.1 \
+rewards.reward_penalty_degree=0.00003 
+```
+
+</details>
+
 ## IsaacLab Environment
 
 ### Install IsaacSim
@@ -127,8 +150,6 @@ sudo apt install cmake build-essential
 ```bash
 pip install -e .
 pip install -e isaac_utils
-conda install pinocchio -c conda-forge
-pip install -r requirements.txt
 ```
 
 ## Genesis Environment
@@ -142,7 +163,6 @@ Install dependencies:
 ```bash
 pip install -e .
 pip install -e isaac_utils
-pip install -r requirements.txt
 ```
 
 

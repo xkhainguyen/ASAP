@@ -27,8 +27,9 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         self.upper_right_arm_dof_names = self.config.robot.upper_right_arm_dof_names
         self.upper_left_arm_dof_indices = [self.dof_names.index(dof) for dof in self.upper_left_arm_dof_names]
         self.upper_right_arm_dof_indices = [self.dof_names.index(dof) for dof in self.upper_right_arm_dof_names]
+        self.hips_dof_id = [self.simulator._body_list.index(link) - 1 for link in self.config.robot.motion.hips_link] # Yuanhang: -1 for the base link (pelvis)
         self.init_done = True
-
+    
     def _init_buffers(self):
         super()._init_buffers()
         self.commands = torch.zeros(
@@ -256,6 +257,12 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         assert self.config.robot.has_upper_body_dof
         deviation = torch.abs(self.simulator.dof_pos[:, self.upper_dof_indices] - self.default_dof_pos[:,self.upper_dof_indices])
         return torch.sum(deviation, dim=1)
+    
+    def _reward_penalty_hip_pos(self):
+        # Penalize the hip joints (only roll and yaw)
+        hips_roll_yaw_indices = self.hips_dof_id[1:3] + self.hips_dof_id[4:6]
+        hip_pos = self.simulator.dof_pos[:, hips_roll_yaw_indices]
+        return torch.sum(torch.square(hip_pos), dim=1)
     
     ########################### GAIT REWARDS ###########################
     def _calc_phase_time(self):
