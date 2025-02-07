@@ -25,6 +25,11 @@ setup(
         "tensorboard",
         "onnx",
         "onnxruntime",
-        "opencv-python"
+        "opencv-python",
+        "joblib",
+        "easydict",
+        "lxml",
+        "numpy-stl",
+        "open3d"
     ]
 )
