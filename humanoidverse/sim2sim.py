@@ -22,26 +22,41 @@ if __name__ == "__main__":
 
     SINGLE_FRAME = False
     LINER_VELOCITY = False
-    policy_path = "logs/MotionTracking/20250412_160544-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_5000.onnx"
+    # policy_path = "logs/MotionTracking/20250412_160544-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_4500.onnx"
+
     # policy_path = "logs/MotionTracking/20250314_095315-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_130500.onnx"
+
+    policy_path = "logs/MotionTracking/20250412_195040-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_6600.onnx"
+
+    # simple
+    # policy_path = "logs/MotionTracking/20250412_194908-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_2500.onnx"
+
     xml_path = "humanoidverse/data/robots/g1/g1_29dof_anneal_23dof_deploy.xml"
     print("policy_path: ", policy_path)
     print("xml_path   : ", xml_path)
 
     # define context variables
-    control_decimation = 10
     simulation_dt = 0.001
-    
+    control_dt = 1 / 50
+    control_decimation = int(control_dt / simulation_dt)
+
     simulation_duration = 60
     counter = 0
     num_actions = 23
 
     action = np.zeros(num_actions, dtype=np.float32)
-    default_angles =  np.array([ -0.1, 0.0, 0.0, 0.3, -0.2, 0.0, 
-                                 -0.1, 0.0, 0.0, 0.3, -0.2, 0.0, 
+
+    # default_angles =  np.array([ -0.1, 0.0, 0.0, 0.3, -0.2, 0., 
+    #                              -0.1, 0.0, 0.0, 0.3, -0.2, 0., 
+    #                               0.0, 0.0, 0.0, 
+    #                               0.0, 0.0, 0.0, 0.0, 
+    #                               0.0, 0.0, 0.0, 0.0 ], dtype=np.float32)
+    
+    default_angles =  np.array([ -0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
+                                 -0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
                                   0.0, 0.0, 0.0, 
                                   0.0, 0.0, 0.0, 0.0, 
-                                  0.0, 0.0, 0.0, 0.0 ], dtype=np.float32)
+                                  0.0, 0.0, 0.0, 0.0 ], dtype=np.float32)  #TODO: offset the ankles instead of delta action
     
     kps = np.array([ 100, 100, 100, 200, 20, 20, 
                      100, 100, 100, 200, 20, 20, 
@@ -66,7 +81,7 @@ if __name__ == "__main__":
         2.618,  0.52,   0.52,
         2.6704, 2.2515, 2.618, 2.0944,
         2.6704, 1.5882, 2.618, 2.0944
-    ], dtype=np.float32)
+    ], dtype=np.float32) * 0.95
 
     dof_lower_limit = np.array([
     -2.5307, -0.5236, -2.7576, -0.087267, -0.87267, -0.2618, 
@@ -74,7 +89,7 @@ if __name__ == "__main__":
     -2.618,  -0.52,   -0.52,
     -3.0892, -1.5882, -2.618, -1.0472,
     -3.0892, -2.2515, -2.618, -1.0472
-    ], dtype=np.float32)
+    ], dtype=np.float32) * 0.95
 
     target_dof_pos = default_angles.copy()
     ref_motion_phase = 0
@@ -97,6 +112,10 @@ if __name__ == "__main__":
     m = mujoco.MjModel.from_xml_path(xml_path)
     d = mujoco.MjData(m)
     m.opt.timestep = simulation_dt
+    # Set contact parameters per geom
+    for i in range(m.ngeom):
+        m.geom_solref[i] = np.array([0.001, 1.0])                    # Stiff contact
+        m.geom_solimp[i] = np.array([0.9, 0.95, 0.001, 0.5, 1.0])     # Less softness
 
     with mujoco.viewer.launch_passive(m, d) as viewer:
         # Close the viewer automatically after simulation_duration wall-seconds.
@@ -126,7 +145,11 @@ if __name__ == "__main__":
                 dof_vel = dqj * 0.05
                 base_ang_vel = ang_vel* 0.25
                 base_lin_vel = lin_vel * 2.0
-                ref_motion_phase += 0.002
+                
+                if (ref_motion_phase < 1.0): # always in [0, 1]
+                    ref_motion_phase += 0.0135  #TODO: compute the phase based on motion length and episode length
+                else:
+                    ref_motion_phase = 1.0
                 
                 """_summary_
                     curr_obs:
@@ -172,7 +195,7 @@ if __name__ == "__main__":
                 # transform action to target_dof_pos
                 target_dof_pos = action * 0.25 + default_angles 
                 
-                target_dof_pos = np.clip(target_dof_pos, dof_lower_limit, dof_upper_limit)
+                # target_dof_pos = np.clip(target_dof_pos, dof_lower_limit, dof_upper_limit)
 
                 # update history
                 ang_vel_buf = np.concatenate((base_ang_vel, ang_vel_buf[:-3]), axis=-1, dtype=np.float32)

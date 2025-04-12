@@ -31,12 +31,17 @@ class LeggedRobotMotionTracking(LeggedRobotBase):
         self.debug_viz = True
         
         super().__init__(config, device)
+        # import ipdb; ipdb.set_trace()
+        logger.info(f"HELLLOOASDASAS")
         self._init_motion_lib()
         self._init_motion_extend()
         self._init_tracking_config()
 
         self.init_done = True
         self.debug_viz = True
+       
+
+
 
         self._init_save_motion()
 
@@ -339,6 +344,7 @@ class LeggedRobotMotionTracking(LeggedRobotBase):
             max_phase = self._ref_motion_phase.max()
             # import ipdb; ipdb.set_trace()
         self._ref_motion_phase = self._ref_motion_phase.unsqueeze(1)
+        import ipdb; ipdb.set_trace()
         # print(f"ref_motion_phase: {self._ref_motion_phase[0].item():.2f}")
         # print(f"ref_motion_length: {self._ref_motion_length[0].item():.2f}")
         

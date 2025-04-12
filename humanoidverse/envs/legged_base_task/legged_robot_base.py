@@ -241,6 +241,7 @@ class LeggedRobotBase(BaseTask):
         self._update_counters_each_step()
         self.last_episode_length_buf = self.episode_length_buf.clone()
 
+        import ipdb; ipdb.set_trace()
         self._pre_compute_observations_callback()
         self._update_tasks_callback()
         # compute observations, rewards, resets, ...
