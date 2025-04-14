@@ -202,6 +202,7 @@ class LeggedRobotBase(BaseTask):
         self._pre_physics_step(actions)
         self._physics_step()
         self._post_physics_step()
+        import ipdb; ipdb.set_trace()
 
         # if self.episode_length_buf[0] == 1:
         #     import ipdb; ipdb.set_trace()

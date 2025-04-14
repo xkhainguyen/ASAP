@@ -343,8 +343,8 @@ class LeggedRobotMotionTracking(LeggedRobotBase):
         if not (torch.all(self._ref_motion_phase >= 0) and torch.all(self._ref_motion_phase <= 1.05)): # hard coded 1.05 because +1 will exceed 1
             max_phase = self._ref_motion_phase.max()
             # import ipdb; ipdb.set_trace()
-        self._ref_motion_phase = self._ref_motion_phase.unsqueeze(1)
-        import ipdb; ipdb.set_trace()
+        self._ref_motion_phase = self._ref_motion_phase.unsqueeze(1) * 0.0
+        # import ipdb; ipdb.set_trace()
         # print(f"ref_motion_phase: {self._ref_motion_phase[0].item():.2f}")
         # print(f"ref_motion_length: {self._ref_motion_length[0].item():.2f}")
         

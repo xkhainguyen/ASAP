@@ -25,23 +25,28 @@ if __name__ == "__main__":
 
     # policy_path = "logs/MotionTracking/20250412_195040-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_6600.onnx"
 
-    policy_path = "logs/MotionTracking/20250412_215612-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_37000.onnx"
+    # policy_path = "logs/MotionTracking/20250412_215612-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_37000.onnx"
 
     # simple
-    # policy_path = "logs/MotionTracking/20250412_194908-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_2500.onnx"
+    # policy_path = "logs/MotionTracking/20250412_194908-test-motion_tracking-g1_29dof_anneal_23dof/exported/model_2500.onnx"
+    # policy_path = "logs/MotionTracking/20250412_224422-test-motion_tracking-g1_29dof_anneal_23dof/exported/model_14600.onnx"
 
-    # policy_path = "logs/MotionTracking/20250412_194908-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_50000.onnx"
+    # motion 2
+    policy_path = "logs/MotionTracking/20250414_144106-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_3000.onnx"
 
-    xml_path = "humanoidverse/data/robots/g1/g1_29dof_anneal_23dof_deploy.xml"
+    # motion_length = 3.933 # seconds from loginfo
+    # motion_length = 3.967
+    motion_length = 4.067
+    xml_path = "humanoidverse/data/robots/g1/g1_29dof_anneal_23dof.xml"
     print("policy_path: ", policy_path)
     print("xml_path   : ", xml_path)
 
     # define context variables
-    simulation_dt = 0.001
+    simulation_dt = 0.002
     control_dt = 1 / 50
     control_decimation = int(control_dt / simulation_dt)
 
-    simulation_duration = 60
+    simulation_duration = 30
     counter = 0
     num_actions = 23
 
@@ -113,10 +118,12 @@ if __name__ == "__main__":
     m = mujoco.MjModel.from_xml_path(xml_path)
     d = mujoco.MjData(m)
     m.opt.timestep = simulation_dt
+
+
     # Set contact parameters per geom
     for i in range(m.ngeom):
-        m.geom_solref[i] = np.array([0.001, 1.0])                    # Stiff contact
-        m.geom_solimp[i] = np.array([0.9, 0.95, 0.001, 0.5, 1.0])     # Less softness
+        m.geom_solref[i] = np.array([0.005, 1.0])                    # Stiff contact
+        m.geom_solimp[i] = np.array([0.9, 0.95, 0.001, 0.5, 0.1])     # Less softness
 
     with mujoco.viewer.launch_passive(m, d) as viewer:
         # Close the viewer automatically after simulation_duration wall-seconds.
@@ -137,7 +144,12 @@ if __name__ == "__main__":
                 # create observation
                 qj = d.qpos[7:]     
                 dqj = d.qvel[6:]    
-                quat = d.qpos[3:7]        
+                quat = d.qpos[3:7]   
+                from scipy.spatial.transform import Rotation as R
+                rotation_quaternion = R.from_euler('y', 0.1).as_quat()  # ('x', angle) creates a rotation quaternion
+                rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
+                quat = rotated_quaternion.as_quat()
+
                 lin_vel = d.qvel[:3]
                 ang_vel = d.qvel[3:6]
 
@@ -148,7 +160,8 @@ if __name__ == "__main__":
                 base_lin_vel = lin_vel * 2.0
                 
                 if (ref_motion_phase < 1.0): # always in [0, 1]
-                    ref_motion_phase += 0.0141  #TODO: compute the phase based on motion length and episode length
+                    # ref_motion_phase += 0.0315  #TODO: compute the phase based on motion length and episode length
+                    ref_motion_phase += 1 * control_dt / motion_length
                 else:
                     ref_motion_phase = 1.0
                 
@@ -182,7 +195,7 @@ if __name__ == "__main__":
                         history_obs_buf = np.concatenate((action_buf, ang_vel_buf, lin_vel_buf, dof_pos_buf, dof_vel_buf, proj_g_buf, ref_motion_phase_buf), axis=-1, dtype=np.float32)
                         obs_buf = np.concatenate((action, base_ang_vel, base_lin_vel, dof_pos, dof_vel, history_obs_buf, projected_gravity, np.array([ref_motion_phase])), axis=-1, dtype=np.float32)
                     elif not LINER_VELOCITY:
-                        # 3 history frames without liner velocity
+                        # USING 3 history frames without liner velocity
                         history_obs_buf = np.concatenate((action_buf, ang_vel_buf, dof_pos_buf, dof_vel_buf, proj_g_buf, ref_motion_phase_buf), axis=-1, dtype=np.float32)
                         obs_buf = np.concatenate((action, base_ang_vel, dof_pos, dof_vel, history_obs_buf, projected_gravity, np.array([ref_motion_phase])), axis=-1, dtype=np.float32)
                     else:
@@ -198,7 +211,7 @@ if __name__ == "__main__":
                 
                 # target_dof_pos = np.clip(target_dof_pos, dof_lower_limit, dof_upper_limit)
 
-                # update history
+                # update history, push the latest to the front, drop the oldest from the end
                 ang_vel_buf = np.concatenate((base_ang_vel, ang_vel_buf[:-3]), axis=-1, dtype=np.float32)
                 lin_vel_buf = np.concatenate((base_lin_vel, lin_vel_buf[:-3]), axis=-1, dtype=np.float32)
                 proj_g_buf = np.concatenate((projected_gravity, proj_g_buf[:-3] ), axis=-1, dtype=np.float32)

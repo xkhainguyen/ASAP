@@ -7,7 +7,9 @@ imu_type: "pelvis"    # "torso" or "pelvis"
 lowcmd_topic: "rt/lowcmd"
 lowstate_topic: "rt/lowstate"
 
-policy_path: "logs/MotionTracking/20250412_195040-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_6600.onnx"
+# policy_path: "logs/MotionTracking/20250412_195040-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_6600.onnx"
+
+policy_path: "logs/MotionTracking/20250412_215612-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_37000.onnx"
 
 # policy_path: "/home/rtx3/khai/vr_rl_gym/ASAP/logs/TestGenesisASAP/20250313_115456-G1Loco-locomotion-g1_29dof_anneal_23dof/exported/model_4000.onnx"
 
@@ -25,6 +27,10 @@ arm_waist_joint2motor_idx: [12, 13, 14,
 arm_waist_kps: [400, 400, 400,
                 90, 60, 20, 60, 20, 20, 20,
                 90, 60, 20, 60, 20, 20, 20]
+
+# arm_waist_kps: [400, 400, 400,
+#                 100, 80, 40, 80, 20, 20, 20,
+#                 100, 80, 40, 80, 20, 20, 20]
 
 arm_waist_kds: [5., 5., 5., 
                 2.0, 1.0, 0.4, 1.0, 1, 1, 1,
@@ -44,6 +50,6 @@ dof_vel_scale: 0.05
 action_scale: 0.25
 cmd_scale: [1.0, 1.0, 1.0]
 num_actions: 23
-num_obs: 78
+num_obs: 0
 
 max_cmd: [0.8, 0.5, 1.57]

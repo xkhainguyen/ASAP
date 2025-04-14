@@ -266,6 +266,7 @@ class MotionLibBase():
         logger.info(f"Loading {num_motion_to_load} motions...")
         logger.info(f"Sampling motion: {sample_idxes[:5]}, ....")
         logger.info(f"Current motion keys: {self.curr_motion_keys[:5]}, ....")
+        logger.info(f"\n\nHEASDADAD\n\n")
 
         motion_data_list = self._motion_data_list[sample_idxes.cpu().numpy()]
         res_acc = self.load_motion_with_skeleton(motion_data_list, self.fix_height, target_heading, max_len)
@@ -438,6 +439,7 @@ class MotionLibBase():
             return self._motion_lengths
         else:
             return self._motion_lengths[motion_ids]
+        
 
 
     def _calc_frame_blend(self, time, len, num_frames, dt):

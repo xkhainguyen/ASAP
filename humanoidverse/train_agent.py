@@ -94,7 +94,6 @@ def main(config: OmegaConf):
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
     
     pre_process_config(config)
-
     # torch.set_float32_matmul_precision("medium")
 
     # fabric: Fabric = instantiate(config.fabric)

@@ -1,6 +1,10 @@
 <mujoco model="g1_29dof_anneal_23dof">
   <compiler angle="radian" meshdir="meshes"/>
-
+  <default>
+    <!-- <joint damping="0.1" armature="0.1" frictionloss="0.1"/> -->
+    <joint frictionloss="0.1" armature="0.005" damping="0.1"/> 
+    <!-- from 0.05 to 1.0 -->
+  </default>
   <asset>
     <mesh name="pelvis" file="pelvis.STL"/>
     <mesh name="pelvis_contour_link" file="pelvis_contour_link.STL"/>
