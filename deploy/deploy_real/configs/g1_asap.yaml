@@ -1,0 +1,49 @@
+# 
+control_dt: 0.02
+
+msg_type: "hg"     # "hg" or "go"
+imu_type: "pelvis"    # "torso" or "pelvis"
+
+lowcmd_topic: "rt/lowcmd"
+lowstate_topic: "rt/lowstate"
+
+policy_path: "logs/MotionTracking/20250412_195040-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_6600.onnx"
+
+# policy_path: "/home/rtx3/khai/vr_rl_gym/ASAP/logs/TestGenesisASAP/20250313_115456-G1Loco-locomotion-g1_29dof_anneal_23dof/exported/model_4000.onnx"
+
+leg_joint2motor_idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+kps: [100, 100, 100, 200, 20, 20, 100, 100, 100, 200, 20, 20]
+kds: [2.5, 2.5, 2.5, 5.0, 0.2, 0.1, 2.5, 2.5, 2.5, 5.0, 0.2, 0.1]
+
+default_angles: [-0.1,  0.0,  0.0,  0.3, -0.2, 0.0, 
+                  -0.1,  0.0,  0.0,  0.3, -0.2, 0.0]
+
+arm_waist_joint2motor_idx: [12, 13, 14, 
+                            15, 16, 17, 18, 19, 20, 21, 
+                            22, 23, 24, 25, 26, 27, 28]
+
+arm_waist_kps: [400, 400, 400,
+                90, 60, 20, 60, 20, 20, 20,
+                90, 60, 20, 60, 20, 20, 20]
+
+arm_waist_kds: [5., 5., 5., 
+                2.0, 1.0, 0.4, 1.0, 1, 1, 1,
+                2.0, 1.0, 0.4, 1.0, 1, 1, 1]
+
+# arm_waist_target: [ 0, 0, 0,
+#                     0.2, 0.2, 0, 0.6, 0, 0, 0,
+#                     0.2, -0.2, 0, 0.6, 0, 0, 0]
+
+arm_waist_target: [ 0, 0, 0,
+                    0., 0., 0, 0., 0, 0, 0,
+                    0., 0., 0, 0., 0, 0, 0]
+
+ang_vel_scale: 0.25
+dof_pos_scale: 1.0
+dof_vel_scale: 0.05
+action_scale: 0.25
+cmd_scale: [1.0, 1.0, 1.0]
+num_actions: 23
+num_obs: 78
+
+max_cmd: [0.8, 0.5, 1.57]

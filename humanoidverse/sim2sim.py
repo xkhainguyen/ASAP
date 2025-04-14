@@ -22,14 +22,15 @@ if __name__ == "__main__":
 
     SINGLE_FRAME = False
     LINER_VELOCITY = False
-    # policy_path = "logs/MotionTracking/20250412_160544-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_4500.onnx"
 
-    # policy_path = "logs/MotionTracking/20250314_095315-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_130500.onnx"
+    # policy_path = "logs/MotionTracking/20250412_195040-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_6600.onnx"
 
-    policy_path = "logs/MotionTracking/20250412_195040-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_6600.onnx"
+    policy_path = "logs/MotionTracking/20250412_215612-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_37000.onnx"
 
     # simple
     # policy_path = "logs/MotionTracking/20250412_194908-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_2500.onnx"
+
+    # policy_path = "logs/MotionTracking/20250412_194908-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_50000.onnx"
 
     xml_path = "humanoidverse/data/robots/g1/g1_29dof_anneal_23dof_deploy.xml"
     print("policy_path: ", policy_path)
@@ -147,7 +148,7 @@ if __name__ == "__main__":
                 base_lin_vel = lin_vel * 2.0
                 
                 if (ref_motion_phase < 1.0): # always in [0, 1]
-                    ref_motion_phase += 0.0135  #TODO: compute the phase based on motion length and episode length
+                    ref_motion_phase += 0.0141  #TODO: compute the phase based on motion length and episode length
                 else:
                     ref_motion_phase = 1.0
                 
