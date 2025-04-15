@@ -204,15 +204,15 @@ class Controller:
             motor_idx = self.config.leg_joint2motor_idx[i]
             self.low_cmd.motor_cmd[motor_idx].q = self.config.default_angles[i]
             self.low_cmd.motor_cmd[motor_idx].qd = 0
-            self.low_cmd.motor_cmd[motor_idx].kp = self.config.kps[i] * 1.1
-            self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i] * 1.1
+            self.low_cmd.motor_cmd[motor_idx].kp = self.config.kps[i] 
+            self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i] 
             self.low_cmd.motor_cmd[motor_idx].tau = 0
         for i in range(len(self.config.arm_waist_joint2motor_idx)):
             motor_idx = self.config.arm_waist_joint2motor_idx[i]
             self.low_cmd.motor_cmd[motor_idx].q = self.config.arm_waist_target[i]
             self.low_cmd.motor_cmd[motor_idx].qd = 0
-            self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] * 1.
-            self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] * 1.
+            self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] 
+            self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] 
             self.low_cmd.motor_cmd[motor_idx].tau = 0
         self.send_cmd(self.low_cmd)
         time.sleep(self.config.control_dt)
@@ -241,17 +241,13 @@ class Controller:
 
         # imu_state quaternion: w, x, y, z
         quat = self.low_state.imu_state.quaternion
-        ang_vel = np.array(self.low_state.imu_state.gyroscope, dtype=np.float32)
-        waist_yaw = 0.0
-        waist_yaw_omega = 0.0
+        # from scipy.spatial.transform import Rotation as R
+        # rotation_quaternion = R.from_euler('y', -0.01).as_quat()  # ('x', angle) creates a rotation quaternion
+        # rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
+        # quat = rotated_quaternion.as_quat()
 
-        if self.config.imu_type == "torso":
-            # h1 and h1_2 imu is on the torso
-            # imu data needs to be transformed]
-            waist_yaw = self.low_state.motor_state[self.config.arm_waist_joint2motor_idx[0]].q
-            waist_yaw_omega = self.low_state.motor_state[self.config.arm_waist_joint2motor_idx[0]].dq
-            quat, ang_vel = transform_imu_data(waist_yaw=waist_yaw, waist_yaw_omega=waist_yaw_omega, imu_quat=quat, imu_omega=ang_vel)
-            
+        ang_vel = np.array(self.low_state.imu_state.gyroscope, dtype=np.float32)
+           
         # create observation
         gravity_orientation = get_gravity_orientation(quat)
         qj_obs = self.qj.copy()
@@ -261,8 +257,10 @@ class Controller:
         ang_vel = ang_vel * self.config.ang_vel_scale
         lin_vel = ang_vel * 0.0
 
+        motion_length = 4.067
         if (self.ref_motion_phase < 1.0): # always in [0, 1]
-            self.ref_motion_phase += 0.0135  #TODO: compute the phase based on motion length and episode length
+            # ref_motion_phase += 0.0315  #TODO: compute the phase based on motion length and episode length
+            self.ref_motion_phase += 1.1 * self.config.control_dt / motion_length
         else:
             self.ref_motion_phase = 1.0
 
@@ -296,9 +294,6 @@ class Controller:
         onnx_pred = self.policy.run(None, {self.input_name: [obs_buf]})[0][0]
         self.action = onnx_pred
         self.action = self.filter_action(self.action, cutoff=5.0)
-
-        # import ipdb
-        # ipdb.set_trace()
         
         # transform action to target_dof_pos
         all_dof_actions = np.zeros(29) # hardware order
@@ -314,16 +309,16 @@ class Controller:
             motor_idx = self.config.leg_joint2motor_idx[i]
             self.low_cmd.motor_cmd[motor_idx].q = self.target_leg_pos[i]
             self.low_cmd.motor_cmd[motor_idx].qd = 0
-            self.low_cmd.motor_cmd[motor_idx].kp = self.config.kps[i]
-            self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i]
+            self.low_cmd.motor_cmd[motor_idx].kp = self.config.kps[i] * 1.05
+            self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i] * 1.1
             self.low_cmd.motor_cmd[motor_idx].tau = 0
 
         for i in range(len(self.config.arm_waist_joint2motor_idx)):
             motor_idx = self.config.arm_waist_joint2motor_idx[i]
             self.low_cmd.motor_cmd[motor_idx].q = self.target_upper_pos[i]
             self.low_cmd.motor_cmd[motor_idx].qd = 0
-            self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i]
-            self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i]
+            self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] * 1.05
+            self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] * 1.1
             self.low_cmd.motor_cmd[motor_idx].tau = 0
 
         # send the command

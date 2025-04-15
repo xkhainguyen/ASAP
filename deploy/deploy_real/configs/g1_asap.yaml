@@ -9,7 +9,7 @@ lowstate_topic: "rt/lowstate"
 
 # policy_path: "logs/MotionTracking/20250412_195040-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_6600.onnx"
 
-policy_path: "logs/MotionTracking/20250412_215612-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_37000.onnx"
+policy_path: "logs/MotionTracking/20250414_144106-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_3000.onnx"
 
 # policy_path: "/home/rtx3/khai/vr_rl_gym/ASAP/logs/TestGenesisASAP/20250313_115456-G1Loco-locomotion-g1_29dof_anneal_23dof/exported/model_4000.onnx"
 

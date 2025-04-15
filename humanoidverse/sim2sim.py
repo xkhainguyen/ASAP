@@ -23,16 +23,22 @@ if __name__ == "__main__":
     SINGLE_FRAME = False
     LINER_VELOCITY = False
 
-    # policy_path = "logs/MotionTracking/20250412_195040-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_6600.onnx"
-
-    # policy_path = "logs/MotionTracking/20250412_215612-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_37000.onnx"
+    # policy_path = "logs/MotionTracking/20250412_195040-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_6600.onnx" # no DR
+    # policy_path = "logs/MotionTracking/20250412_215612-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_37400.onnx" # small DR
 
     # simple
-    # policy_path = "logs/MotionTracking/20250412_194908-test-motion_tracking-g1_29dof_anneal_23dof/exported/model_2500.onnx"
-    # policy_path = "logs/MotionTracking/20250412_224422-test-motion_tracking-g1_29dof_anneal_23dof/exported/model_14600.onnx"
+    # policy_path = "logs/MotionTracking/20250412_194908-test-motion_tracking-g1_29dof_anneal_23dof/exported/model_52400.onnx" # small DR
+    # policy_path = "logs/MotionTracking/20250412_224422-test-motion_tracking-g1_29dof_anneal_23dof/exported/model_44300.onnx" # no DR
+
+    # motion 1
+    # policy_path = "logs/MotionTracking/20250414_143940-MotionTracking_motion1-motion_tracking-g1_29dof_anneal_23dof/exported/model_2500.onnx" # small DR
+    # policy_path = "logs/MotionTracking/20250414_170657-MotionTracking_motion1-motion_tracking-g1_29dof_anneal_23dof/exported/model_7500.onnx" # no DR
+    # policy_path = "logs/MotionTracking/20250414_170657-MotionTracking_motion1-motion_tracking-g1_29dof_anneal_23dof/exported/model_2500.onnx" # no DR
+
 
     # motion 2
-    policy_path = "logs/MotionTracking/20250414_144106-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_3000.onnx"
+    policy_path = "logs/MotionTracking/20250414_144106-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_3000.onnx" # small DR
+    # policy_path = "logs/MotionTracking/20250414_170022-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_11000.onnx" # no DR
 
     # motion_length = 3.933 # seconds from loginfo
     # motion_length = 3.967
@@ -87,7 +93,7 @@ if __name__ == "__main__":
         2.618,  0.52,   0.52,
         2.6704, 2.2515, 2.618, 2.0944,
         2.6704, 1.5882, 2.618, 2.0944
-    ], dtype=np.float32) * 0.95
+    ], dtype=np.float32) 
 
     dof_lower_limit = np.array([
     -2.5307, -0.5236, -2.7576, -0.087267, -0.87267, -0.2618, 
@@ -95,7 +101,7 @@ if __name__ == "__main__":
     -2.618,  -0.52,   -0.52,
     -3.0892, -1.5882, -2.618, -1.0472,
     -3.0892, -2.2515, -2.618, -1.0472
-    ], dtype=np.float32) * 0.95
+    ], dtype=np.float32) 
 
     target_dof_pos = default_angles.copy()
     ref_motion_phase = 0
@@ -117,6 +123,11 @@ if __name__ == "__main__":
     # Load robot model
     m = mujoco.MjModel.from_xml_path(xml_path)
     d = mujoco.MjData(m)
+    d.qpos[7:] = np.array([ -0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
+                            -0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
+                            0.0, 0.0, 0.0, 
+                            0.0, 0.0, 0.0, 1.57, 
+                            0.0, 0.0, 0.0, 1.57 ], dtype=np.float32)
     m.opt.timestep = simulation_dt
 
 
@@ -146,7 +157,7 @@ if __name__ == "__main__":
                 dqj = d.qvel[6:]    
                 quat = d.qpos[3:7]   
                 from scipy.spatial.transform import Rotation as R
-                rotation_quaternion = R.from_euler('y', 0.1).as_quat()  # ('x', angle) creates a rotation quaternion
+                rotation_quaternion = R.from_euler('y', 0.25).as_quat()  # ('x', angle) creates a rotation quaternion
                 rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
                 quat = rotated_quaternion.as_quat()
 
@@ -161,7 +172,7 @@ if __name__ == "__main__":
                 
                 if (ref_motion_phase < 1.0): # always in [0, 1]
                     # ref_motion_phase += 0.0315  #TODO: compute the phase based on motion length and episode length
-                    ref_motion_phase += 1 * control_dt / motion_length
+                    ref_motion_phase += 1.0 * control_dt / motion_length
                 else:
                     ref_motion_phase = 1.0
                 
@@ -209,7 +220,7 @@ if __name__ == "__main__":
                 # transform action to target_dof_pos
                 target_dof_pos = action * 0.25 + default_angles 
                 
-                # target_dof_pos = np.clip(target_dof_pos, dof_lower_limit, dof_upper_limit)
+                target_dof_pos = np.clip(target_dof_pos, dof_lower_limit * 0.98, dof_upper_limit * 0.98)
 
                 # update history, push the latest to the front, drop the oldest from the end
                 ang_vel_buf = np.concatenate((base_ang_vel, ang_vel_buf[:-3]), axis=-1, dtype=np.float32)
