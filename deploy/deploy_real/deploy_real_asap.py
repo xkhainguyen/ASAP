@@ -92,7 +92,8 @@ class Controller:
         self.counter = 0
         self.update_mode_machine_ = False
         self.real_deploy = False
-        self.act_buffer = deque(maxlen=100)
+        self.act_buffer = deque(maxlen=6)
+        self.last_time = 0.0
 
         self.history_length = 4  
         self.lin_vel_buf = np.zeros(3 * self.history_length, dtype=np.float32)
@@ -197,7 +198,7 @@ class Controller:
 
     def keep_default_state(self):
         print("Enter default state.")
-        print("Waiting for the Button A signal...")
+        # print("Waiting for the Button A signal...")
 
         # while self.remote_controller.button[KeyMap.A] != 1:
         for i in range(len(self.config.leg_joint2motor_idx)):
@@ -241,10 +242,10 @@ class Controller:
 
         # imu_state quaternion: w, x, y, z
         quat = self.low_state.imu_state.quaternion
-        # from scipy.spatial.transform import Rotation as R
-        # rotation_quaternion = R.from_euler('y', -0.01).as_quat()  # ('x', angle) creates a rotation quaternion
-        # rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
-        # quat = rotated_quaternion.as_quat()
+        from scipy.spatial.transform import Rotation as R
+        rotation_quaternion = R.from_euler('y', 0.1).as_quat()  # ('x', angle) creates a rotation quaternion
+        rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
+        quat = rotated_quaternion.as_quat()
 
         ang_vel = np.array(self.low_state.imu_state.gyroscope, dtype=np.float32)
            
@@ -260,7 +261,7 @@ class Controller:
         motion_length = 4.067
         if (self.ref_motion_phase < 1.0): # always in [0, 1]
             # ref_motion_phase += 0.0315  #TODO: compute the phase based on motion length and episode length
-            self.ref_motion_phase += 1.1 * self.config.control_dt / motion_length
+            self.ref_motion_phase += 1.0 * self.config.control_dt / motion_length
         else:
             self.ref_motion_phase = 1.0
 
@@ -310,7 +311,7 @@ class Controller:
             self.low_cmd.motor_cmd[motor_idx].q = self.target_leg_pos[i]
             self.low_cmd.motor_cmd[motor_idx].qd = 0
             self.low_cmd.motor_cmd[motor_idx].kp = self.config.kps[i] * 1.05
-            self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i] * 1.1
+            self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i] * 1.0
             self.low_cmd.motor_cmd[motor_idx].tau = 0
 
         for i in range(len(self.config.arm_waist_joint2motor_idx)):
@@ -318,7 +319,7 @@ class Controller:
             self.low_cmd.motor_cmd[motor_idx].q = self.target_upper_pos[i]
             self.low_cmd.motor_cmd[motor_idx].qd = 0
             self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] * 1.05
-            self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] * 1.1
+            self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] * 1.0
             self.low_cmd.motor_cmd[motor_idx].tau = 0
 
         # send the command
@@ -333,8 +334,16 @@ class Controller:
         self.action_buf = np.concatenate((self.action, self.action_buf[:-23] ), axis=-1, dtype=np.float32)
         self.ref_motion_phase_buf = np.concatenate((np.array([self.ref_motion_phase]), self.ref_motion_phase_buf[:-1]), axis=-1, dtype=np.float32)   
         
-        time.sleep(self.config.control_dt) # run every control_dt seconds
+        time.sleep(self.config.control_dt * 0.94) # run every control_dt seconds
 
+        # """Callback function to handle incoming messages."""
+        # current_time = time.time()
+        # read_dt = current_time - self.last_time
+        # self.last_time = current_time
+
+        # if read_dt > 0:
+        #     print(f"Published message at {1/read_dt:.2f} Hz")  # Print the actual receiving fr
+            
     def handle_key_cmd(self):
         # self.cmd[0] = self.remote_controller.ly
         # self.cmd[1] = self.remote_controller.lx * -1

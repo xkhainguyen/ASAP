@@ -33,10 +33,7 @@ def init_cmd_hg(cmd: LowCmdHG, mode_machine: int, mode_pr: int):
     cmd.mode_pr = mode_pr
     size = len(cmd.motor_cmd)
     for i in range(size):
-        if (i == 14) and (i==13): # pitch
-            cmd.motor_cmd[i].mode = 0
-        else:
-            cmd.motor_cmd[i].mode = 1
+        cmd.motor_cmd[i].mode = 1
         cmd.motor_cmd[i].q = 0
         cmd.motor_cmd[i].qd = 0
         cmd.motor_cmd[i].kp = 0

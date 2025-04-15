@@ -7,11 +7,7 @@ imu_type: "pelvis"    # "torso" or "pelvis"
 lowcmd_topic: "rt/lowcmd"
 lowstate_topic: "rt/lowstate"
 
-# policy_path: "logs/MotionTracking/20250412_195040-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_6600.onnx"
-
-policy_path: "logs/MotionTracking/20250414_144106-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_3000.onnx"
-
-# policy_path: "/home/rtx3/khai/vr_rl_gym/ASAP/logs/TestGenesisASAP/20250313_115456-G1Loco-locomotion-g1_29dof_anneal_23dof/exported/model_4000.onnx"
+policy_path: "logs/MotionTracking/20250412_194908-test-motion_tracking-g1_29dof_anneal_23dof/exported/model_52400.onnx"
 
 leg_joint2motor_idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 kps: [100, 100, 100, 200, 20, 20, 100, 100, 100, 200, 20, 20]
