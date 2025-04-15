@@ -41,7 +41,7 @@ if __name__ == "__main__":
     # policy_path = "logs/MotionTracking/20250414_170022-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_11000.onnx" # no DR
 
     # motion 3
-    policy_path = "logs/MotionTracking/20250415_120557-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_5200.onnx"
+    policy_path = "logs/MotionTracking/20250415_120557-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_10000.onnx"
 
     # motion_length = 3.933 # seconds from loginfo
     # motion_length = 3.967

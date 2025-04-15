@@ -108,7 +108,6 @@ class StandController:
     def __init__(self) -> None:
         config = StandConfig()
         self.config = config
-        self.remote_controller = RemoteController()
         self.key_listener = KeyListener()
 
         # Initialize the policy network
@@ -157,7 +156,6 @@ class StandController:
             self.update_mode_machine_ = True
         self.low_state = msg
         self.mode_machine_ = self.low_state.mode_machine
-        self.remote_controller.set(self.low_state.wireless_remote)
 
     def send_cmd(self, cmd: LowCmdHG):
         cmd.crc = CRC().Crc(cmd)
@@ -348,11 +346,49 @@ class StandController:
             self.cmd = np.array([0.2, -0.15, 0.0]) * 0.0
             print("[MODE] New command: ", self.cmd)
 
+class ASAPConfig:
+    def __init__(self):
+        self.control_dt = 0.02
+        self.msg_type = "hg"
+        self.imu_type = "pelvis"
+        self.lowcmd_topic = "rt/lowcmd"
+        self.lowstate_topic = "rt/lowstate"
+        self.policy_path = "logs/MotionTracking/20250415_120557-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_10000.onnx"
+        self.leg_joint2motor_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        self.kps = [100, 100, 100, 200, 40, 20, 100, 100, 100, 200, 40, 20]
+        self.kds = [2.5, 2.5, 2.5, 5.0, 0.2, 0.2, 2.5, 2.5, 2.5, 5.0, 0.2, 0.2]
+        self.default_angles23 = np.array([-0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
+                                            -0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
+                                            0.0, 0.0, 0.0, 
+                                            0.0, 0.0, 0.0, 0.0, 
+                                            0.0, 0.0, 0.0, 0.0 ], dtype=np.float32)  #TODO: offset the ankles instead of delta action
+        self.arm_waist_joint2motor_idx = [12, 13, 14, 
+                                          15, 16, 17, 18, 19, 20, 21, 
+                                          22, 23, 24, 25, 26, 27, 28]
+        self.arm_waist_kps = [300, 300, 300,
+                                       100, 100, 50, 50, 20, 20, 20,
+                                       100, 100, 50, 50, 20, 20, 20]
+        self.arm_waist_kds = [3, 3, 3, 
+                                       2, 2, 2, 2, 1, 1, 1,
+                                       2, 2, 2, 2, 1, 1, 1]
+        self.arm_waist_target = np.array([0, 0, 0,
+                                          0, 0, 0, 0, 0, 0, 0,
+                                          0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
+        self.action_joint2motor_idx = np.array([0, 1, 2, 3, 4, 5, 
+                                                    6, 7, 8, 9, 10, 11,
+                                                    12, 13, 14,
+                                                    15, 16, 17, 18, 
+                                                    22, 23, 24, 25])
+        self.ang_vel_scale = 0.25
+        self.dof_pos_scale = 1.0
+        self.dof_vel_scale = 0.05
+        self.action_scale = 0.25
+        self.num_actions = 23
+
 class ASAPController:
-    def __init__(self, config: Config) -> None:
+    def __init__(self) -> None:
+        config = ASAPConfig()
         self.config = config
-        self.remote_controller = RemoteController()
-        self.key_listener = KeyListener()
 
         # Initialize the policy network
         self.policy = rt.InferenceSession(
@@ -381,19 +417,7 @@ class ASAPController:
         self.dof_pos_buf = np.zeros(23 * self.history_length, dtype=np.float32)
         self.dof_vel_buf = np.zeros(23 * self.history_length, dtype=np.float32)
         self.action_buf = np.zeros(23 * self.history_length, dtype=np.float32)
-        self.ref_motion_phase_buf = np.zeros(1 * self.history_length, dtype=np.float32)
-
-        self.config.default_angles23 = np.array([-0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
-                                            -0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
-                                            0.0, 0.0, 0.0, 
-                                            0.0, 0.0, 0.0, 0.0, 
-                                            0.0, 0.0, 0.0, 0.0 ], dtype=np.float32)  #TODO: offset the ankles instead of delta action
-        
-        self.config.action_joint2motor_idx = np.array([0, 1, 2, 3, 4, 5, 
-                                                    6, 7, 8, 9, 10, 11,
-                                                    12, 13, 14,
-                                                    15, 16, 17, 18, 
-                                                    22, 23, 24, 25])
+        self.ref_motion_phase_buf = np.zeros(1 * self.history_length, dtype=np.float32)    
                 
         if config.msg_type == "hg":
             # g1 and h1_2 use the hg msg type
@@ -449,7 +473,7 @@ class ASAPController:
 
         # imu_state quaternion: w, x, y, z
         quat = self.low_state.imu_state.quaternion
-        rotation_quaternion = R.from_euler('y', 0.2).as_quat()  # ('x', angle) creates a rotation quaternion
+        rotation_quaternion = R.from_euler('y', -0.2).as_quat()  # ('x', angle) creates a rotation quaternion
         rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
         quat = rotated_quaternion.as_quat()
 
@@ -526,7 +550,7 @@ class ASAPController:
             # self.low_cmd.motor_cmd[motor_idx].mode = 0
             self.low_cmd.motor_cmd[motor_idx].q = self.target_upper_pos[i] 
             self.low_cmd.motor_cmd[motor_idx].qd = 0
-            self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] * 1.05
+            self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] * 1.0
             self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] * 1.0
             self.low_cmd.motor_cmd[motor_idx].tau = 0
 
@@ -584,37 +608,35 @@ if __name__ == "__main__":
     ChannelFactoryInitialize(channel, args.net)
     print("DDS communication initialized.")
 
-    asap_controller = ASAPController(config)
-    controller = StandController()
+    asap_controller = ASAPController()
+    standing_controller = StandController()
 
     if real_deploy:
         # Enter the zero torque state, press the start key to continue executing
-        controller.zero_torque_state()
+        standing_controller.zero_torque_state()
 
         # Gradually move to the default state
-        controller.start_default_state()
+        standing_controller.start_default_state()
 
         # Keep the robot at default state, press the A key to continue executing
-        controller.keep_default_state()
+        standing_controller.keep_default_state()
 
     while True:
         try:
             if enable_asap:
                 asap_controller.run()
             else:
-                controller.run()
+                standing_controller.run()
             # Press the select key to exit
-            if controller.key_listener.is_pressed('o'):
+            if standing_controller.key_listener.is_pressed('o'):
                 asap_controller.clear_phase()
                 enable_asap = 1
-            if controller.key_listener.is_pressed('p'):
+            if standing_controller.key_listener.is_pressed('p'):
                 enable_asap = 0
-            if controller.remote_controller.button[KeyMap.select] == 1:
-                break
         except KeyboardInterrupt:
             break
 
     # Enter the damping state
-    create_damping_cmd(controller.low_cmd)
-    controller.send_cmd(controller.low_cmd)
+    create_damping_cmd(standing_controller.low_cmd)
+    standing_controller.send_cmd(standing_controller.low_cmd)
     print("Exit")
