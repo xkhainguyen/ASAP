@@ -149,6 +149,7 @@ class StandController:
         # Initialize the command msg
         if config.msg_type == "hg":
             init_cmd_hg(self.low_cmd, self.mode_machine_, self.mode_pr_)
+            print(self.mode_machine_)
             
     def LowStateHgHandler(self, msg: LowStateHG):
         if self.update_mode_machine_ == False:
@@ -347,221 +348,221 @@ class StandController:
             self.cmd = np.array([0.2, -0.15, 0.0]) * 0.0
             print("[MODE] New command: ", self.cmd)
 
-# class ASAPController:
-#     def __init__(self, config: Config) -> None:
-#         self.config = config
-#         self.remote_controller = RemoteController()
-#         self.key_listener = KeyListener()
+class ASAPController:
+    def __init__(self, config: Config) -> None:
+        self.config = config
+        self.remote_controller = RemoteController()
+        self.key_listener = KeyListener()
 
-#         # Initialize the policy network
-#         self.policy = rt.InferenceSession(
-#             config.policy_path, providers=["CPUExecutionProvider"]
-#         )
-#         self.input_name = self.policy.get_inputs()[0].name
-#         print(f"policy: {config.policy_path}")
-#         # Initializing process variables
-#         self.qj = np.zeros(config.num_actions, dtype=np.float32)
-#         self.dqj = np.zeros(config.num_actions, dtype=np.float32)
-#         self.tauj = np.zeros(config.num_actions, dtype=np.float32)
-#         self.action = np.zeros(config.num_actions, dtype=np.float32)
-#         self.ref_motion_phase = 0
-#         self.config.num_curr_obs = config.num_actions + 3 + config.num_actions*2 + 3 + 1
+        # Initialize the policy network
+        self.policy = rt.InferenceSession(
+            config.policy_path, providers=["CPUExecutionProvider"]
+        )
+        self.input_name = self.policy.get_inputs()[0].name
+        print(f"policy: {config.policy_path}")
+        # Initializing process variables
+        self.qj = np.zeros(config.num_actions, dtype=np.float32)
+        self.dqj = np.zeros(config.num_actions, dtype=np.float32)
+        self.tauj = np.zeros(config.num_actions, dtype=np.float32)
+        self.action = np.zeros(config.num_actions, dtype=np.float32)
+        self.ref_motion_phase = 0
+        self.config.num_curr_obs = config.num_actions + 3 + config.num_actions*2 + 3 + 1
 
-#         self.cmd = np.array([0.0, 0, 0])
-#         self.counter = 0
-#         self.update_mode_machine_ = False
-#         self.real_deploy = False
-#         self.act_buffer = deque(maxlen=10)
-#         self.last_time = 0.0
+        self.cmd = np.array([0.0, 0, 0])
+        self.counter = 0
+        self.update_mode_machine_ = False
+        self.act_buffer = deque(maxlen=10)
+        self.last_time = 0.0
 
-#         self.history_length = 4  
-#         self.lin_vel_buf = np.zeros(3 * self.history_length, dtype=np.float32)
-#         self.ang_vel_buf = np.zeros(3 * self.history_length, dtype=np.float32)
-#         self.proj_g_buf = np.zeros(3 * self.history_length, dtype=np.float32)
-#         self.dof_pos_buf = np.zeros(23 * self.history_length, dtype=np.float32)
-#         self.dof_vel_buf = np.zeros(23 * self.history_length, dtype=np.float32)
-#         self.action_buf = np.zeros(23 * self.history_length, dtype=np.float32)
-#         self.ref_motion_phase_buf = np.zeros(1 * self.history_length, dtype=np.float32)
+        self.history_length = 4  
+        self.lin_vel_buf = np.zeros(3 * self.history_length, dtype=np.float32)
+        self.ang_vel_buf = np.zeros(3 * self.history_length, dtype=np.float32)
+        self.proj_g_buf = np.zeros(3 * self.history_length, dtype=np.float32)
+        self.dof_pos_buf = np.zeros(23 * self.history_length, dtype=np.float32)
+        self.dof_vel_buf = np.zeros(23 * self.history_length, dtype=np.float32)
+        self.action_buf = np.zeros(23 * self.history_length, dtype=np.float32)
+        self.ref_motion_phase_buf = np.zeros(1 * self.history_length, dtype=np.float32)
 
-#         self.config.default_angles23 = np.array([-0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
-#                                             -0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
-#                                             0.0, 0.0, 0.0, 
-#                                             0.0, 0.0, 0.0, 0.0, 
-#                                             0.0, 0.0, 0.0, 0.0 ], dtype=np.float32)  #TODO: offset the ankles instead of delta action
+        self.config.default_angles23 = np.array([-0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
+                                            -0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
+                                            0.0, 0.0, 0.0, 
+                                            0.0, 0.0, 0.0, 0.0, 
+                                            0.0, 0.0, 0.0, 0.0 ], dtype=np.float32)  #TODO: offset the ankles instead of delta action
         
-#         self.config.action_joint2motor_idx = np.array([0, 1, 2, 3, 4, 5, 
-#                                                     6, 7, 8, 9, 10, 11,
-#                                                     12, 13, 14,
-#                                                     15, 16, 17, 18, 
-#                                                     22, 23, 24, 25])
+        self.config.action_joint2motor_idx = np.array([0, 1, 2, 3, 4, 5, 
+                                                    6, 7, 8, 9, 10, 11,
+                                                    12, 13, 14,
+                                                    15, 16, 17, 18, 
+                                                    22, 23, 24, 25])
                 
-#         if config.msg_type == "hg":
-#             # g1 and h1_2 use the hg msg type
-#             self.low_cmd = unitree_hg_msg_dds__LowCmd_()
-#             self.low_state = unitree_hg_msg_dds__LowState_()
-#             self.mode_pr_ = MotorMode.PR
-#             self.mode_machine_ = 0
+        if config.msg_type == "hg":
+            # g1 and h1_2 use the hg msg type
+            self.low_cmd = unitree_hg_msg_dds__LowCmd_()
+            self.low_state = unitree_hg_msg_dds__LowState_()
+            self.mode_pr_ = MotorMode.PR
+            self.mode_machine_ = 5
 
-#             self.lowcmd_publisher_ = ChannelPublisher(config.lowcmd_topic, LowCmdHG)
-#             self.lowcmd_publisher_.Init()
+            self.lowcmd_publisher_ = ChannelPublisher(config.lowcmd_topic, LowCmdHG)
+            self.lowcmd_publisher_.Init()
 
-#             self.lowstate_subscriber = ChannelSubscriber(config.lowstate_topic, LowStateHG)
-#             self.lowstate_subscriber.Init(self.LowStateHgHandler, 10)
-#         else:
-#             raise ValueError("Invalid msg_type")
+            self.lowstate_subscriber = ChannelSubscriber(config.lowstate_topic, LowStateHG)
+            self.lowstate_subscriber.Init(self.LowStateHgHandler, 10)
+        else:
+            raise ValueError("Invalid msg_type")
 
-#         # Initialize the command msg
-#         if config.msg_type == "hg":
-#             init_cmd_hg(self.low_cmd, self.mode_machine_, self.mode_pr_)
-            
-#     def send_cmd(self, cmd: Union[LowCmdHG]):
-#         cmd.crc = CRC().Crc(cmd)
-#         self.lowcmd_publisher_.Write(cmd)
+        # Initialize the command msg
+        if config.msg_type == "hg":
+            init_cmd_hg(self.low_cmd, self.mode_machine_, self.mode_pr_)
 
-#     def keep_default_state(self):
-#         print("Enter default state.")
-#         # print("Waiting for the Button A signal...")
+    def LowStateHgHandler(self, msg: LowStateHG):
+        if self.update_mode_machine_ == False:
+            self.mode_machine_ = self.low_state.mode_machine
+            self.update_mode_machine_ = True
+        self.low_state = msg
+        self.mode_machine_ = self.low_state.mode_machine
 
-#         # while self.remote_controller.button[KeyMap.A] != 1:
-#         for i in range(len(self.config.leg_joint2motor_idx)):
-#             motor_idx = self.config.leg_joint2motor_idx[i]
-#             self.low_cmd.motor_cmd[motor_idx].q = self.config.default_angles[i]
-#             self.low_cmd.motor_cmd[motor_idx].qd = 0
-#             self.low_cmd.motor_cmd[motor_idx].kp = self.config.kps[i] 
-#             self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i] 
-#             self.low_cmd.motor_cmd[motor_idx].tau = 0
-#         for i in range(len(self.config.arm_waist_joint2motor_idx)):
-#             motor_idx = self.config.arm_waist_joint2motor_idx[i]
-#             self.low_cmd.motor_cmd[motor_idx].q = self.config.arm_waist_target[i]
-#             self.low_cmd.motor_cmd[motor_idx].qd = 0
-#             self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] 
-#             self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] 
-#             self.low_cmd.motor_cmd[motor_idx].tau = 0
+    def send_cmd(self, cmd: Union[LowCmdHG]):
+        cmd.crc = CRC().Crc(cmd)
+        self.lowcmd_publisher_.Write(cmd)
 
-#     def filter_action(self, action, cutoff=5.0):
-#         """ Updates the FIFO buffer and filters acceleration if enough data is available. """
-#         # Add new acceleration sample to FIFO buffer
-#         self.act_buffer.append(action)
+    def filter_action(self, action, cutoff=5.0):
+        """ Updates the FIFO buffer and filters acceleration if enough data is available. """
+        # Add new acceleration sample to FIFO buffer
+        self.act_buffer.append(action)
 
-#         # Only filter if there are at least 6 samples
-#         if len(self.act_buffer) > 6:
-#             act_array = np.array(self.act_buffer)
-#             filtered_act = low_pass_filter(act_array, cutoff, fs=1/self.config.control_dt)
-#             return filtered_act[-1]  # Return the most recent filtered value
-#         else:
-#             return action  # Return raw value if not enough data
+        # Only filter if there are at least 6 samples
+        if len(self.act_buffer) > 6:
+            act_array = np.array(self.act_buffer)
+            filtered_act = low_pass_filter(act_array, cutoff, fs=1/self.config.control_dt)
+            return filtered_act[-1]  # Return the most recent filtered value
+        else:
+            return action  # Return raw value if not enough data
         
-#     def run(self):
-#         # OBSERVATION
-#         self.counter += 1
-#         # Get the current joint position and velocity
-#         for i in range(len(self.config.action_joint2motor_idx)):
-#             self.qj[i] = self.low_state.motor_state[self.config.action_joint2motor_idx[i]].q
-#             self.dqj[i] = self.low_state.motor_state[self.config.action_joint2motor_idx[i]].dq
-#             self.tauj[i] = self.low_state.motor_state[self.config.action_joint2motor_idx[i]].tau_est
+    def run(self):
+        # OBSERVATION
+        self.counter += 1
+        # Get the current joint position and velocity
+        for i in range(len(self.config.action_joint2motor_idx)):
+            self.qj[i] = self.low_state.motor_state[self.config.action_joint2motor_idx[i]].q
+            self.dqj[i] = self.low_state.motor_state[self.config.action_joint2motor_idx[i]].dq
+            self.tauj[i] = self.low_state.motor_state[self.config.action_joint2motor_idx[i]].tau_est
 
-#         # imu_state quaternion: w, x, y, z
-#         quat = self.low_state.imu_state.quaternion
-#         rotation_quaternion = R.from_euler('y', 0.1).as_quat()  # ('x', angle) creates a rotation quaternion
-#         rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
-#         quat = rotated_quaternion.as_quat()
+        # imu_state quaternion: w, x, y, z
+        quat = self.low_state.imu_state.quaternion
+        rotation_quaternion = R.from_euler('y', 0.2).as_quat()  # ('x', angle) creates a rotation quaternion
+        rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
+        quat = rotated_quaternion.as_quat()
 
-#         ang_vel = np.array(self.low_state.imu_state.gyroscope, dtype=np.float32)
+        ang_vel = np.array(self.low_state.imu_state.gyroscope, dtype=np.float32)
            
-#         # create observation
-#         gravity_orientation = get_gravity_orientation(quat)
-#         qj_obs = self.qj.copy()
-#         dqj_obs = self.dqj.copy()
-#         qj_obs = (qj_obs - self.config.default_angles23) * self.config.dof_pos_scale
-#         dqj_obs = dqj_obs * self.config.dof_vel_scale
-#         ang_vel = ang_vel * self.config.ang_vel_scale
-#         lin_vel = ang_vel * 0.0
+        # create observation
+        gravity_orientation = get_gravity_orientation(quat)
+        qj_obs = self.qj.copy()
+        dqj_obs = self.dqj.copy()
+        qj_obs = (qj_obs - self.config.default_angles23) * self.config.dof_pos_scale
+        dqj_obs = dqj_obs * self.config.dof_vel_scale
+        ang_vel = ang_vel * self.config.ang_vel_scale
+        lin_vel = ang_vel * 0.0
 
-#         motion_length = 4.067
-#         if (self.ref_motion_phase < 1.0): # always in [0, 1]
-#             # ref_motion_phase += 0.0315  #TODO: compute the phase based on motion length and episode length
-#             self.ref_motion_phase += 1.0 * self.config.control_dt / motion_length
-#         else:
-#             self.ref_motion_phase = 1.0
+        motion_length = 4.0
+        if (self.ref_motion_phase < 1.0): # always in [0, 1]
+            # ref_motion_phase += 0.0315  #TODO: compute the phase based on motion length and episode length
+            self.ref_motion_phase += 1.0 * self.config.control_dt / motion_length
+        else:
+            self.ref_motion_phase = 1.0
 
-#         if SINGLE_FRAME:
-#             # 1 single frame  
-#             current_obs = np.concatenate((
-#                                         ang_vel,
-#                                         lin_vel,
-#                                         qj_obs,
-#                                         dqj_obs,
-#                                         gravity_orientation,
-#                                         np.array([self.ref_motion_phase])
-#                         ), axis=-1, dtype=np.float32)
-#             obs_buf = current_obs
+        if SINGLE_FRAME:
+            # 1 single frame  
+            current_obs = np.concatenate((
+                                        ang_vel,
+                                        lin_vel,
+                                        qj_obs,
+                                        dqj_obs,
+                                        gravity_orientation,
+                                        np.array([self.ref_motion_phase])
+                        ), axis=-1, dtype=np.float32)
+            obs_buf = current_obs
         
-#         elif not SINGLE_FRAME:
-#             if LINER_VELOCITY:
-#                 # 2 history frames with liner velocity
-#                 history_obs_buf = np.concatenate((self.action_buf, self.ang_vel_buf, self.lin_vel_buf, self.dof_pos_buf, self.dof_vel_buf, self.proj_g_buf, self.ref_motion_phase_buf), axis=-1, dtype=np.float32)
-#                 obs_buf = np.concatenate((self.action, ang_vel, lin_vel, qj_obs, dqj_obs, history_obs_buf, gravity_orientation, np.array([self.ref_motion_phase])), axis=-1, dtype=np.float32)
-#             elif not LINER_VELOCITY:
-#                 # USING 3 history frames without liner velocity
-#                 history_obs_buf = np.concatenate((self.action_buf, self.ang_vel_buf, self.dof_pos_buf, self.dof_vel_buf, self.proj_g_buf, self.ref_motion_phase_buf), axis=-1, dtype=np.float32)
-#                 obs_buf = np.concatenate((self.action, ang_vel, qj_obs, dqj_obs, history_obs_buf, gravity_orientation, np.array([self.ref_motion_phase])), axis=-1, dtype=np.float32)
-#             else:
-#                 assert False
-#         else: assert False
+        elif not SINGLE_FRAME:
+            if LINER_VELOCITY:
+                # 2 history frames with liner velocity
+                history_obs_buf = np.concatenate((self.action_buf, self.ang_vel_buf, self.lin_vel_buf, self.dof_pos_buf, self.dof_vel_buf, self.proj_g_buf, self.ref_motion_phase_buf), axis=-1, dtype=np.float32)
+                obs_buf = np.concatenate((self.action, ang_vel, lin_vel, qj_obs, dqj_obs, history_obs_buf, gravity_orientation, np.array([self.ref_motion_phase])), axis=-1, dtype=np.float32)
+            elif not LINER_VELOCITY:
+                # USING 3 history frames without liner velocity
+                history_obs_buf = np.concatenate((self.action_buf, self.ang_vel_buf, self.dof_pos_buf, self.dof_vel_buf, self.proj_g_buf, self.ref_motion_phase_buf), axis=-1, dtype=np.float32)
+                obs_buf = np.concatenate((self.action, ang_vel, qj_obs, dqj_obs, history_obs_buf, gravity_orientation, np.array([self.ref_motion_phase])), axis=-1, dtype=np.float32)
+            else:
+                assert False
+        else: assert False
 
-#         # ACTION
-#         # Get the action from the policy network
-#         onnx_pred = self.policy.run(None, {self.input_name: [obs_buf]})[0][0]
-#         self.action = onnx_pred
-#         self.action = self.filter_action(self.action, cutoff=5.0)
+        # ACTION
+        # Get the action from the policy network
+        onnx_pred = self.policy.run(None, {self.input_name: [obs_buf]})[0][0]
+        self.action = onnx_pred
+        self.action = self.filter_action(self.action, cutoff=5.0)
         
-#         # transform action to target_dof_pos
-#         all_dof_actions = np.zeros(29) # hardware order
-#         all_dof_actions[self.config.action_joint2motor_idx] = self.config.default_angles23 + self.action * self.config.action_scale
+        # transform action to target_dof_pos
+        all_dof_actions = np.zeros(29) # hardware order
+        all_dof_actions[self.config.action_joint2motor_idx] = self.config.default_angles23 + self.action * self.config.action_scale
 
-#         all_dof_actions = np.clip(all_dof_actions.copy(), dof_lower_limit*0.98,  dof_upper_limit*0.98)
+        all_dof_actions = np.clip(all_dof_actions.copy(), dof_lower_limit*0.98,  dof_upper_limit*0.98)
 
-#         self.target_leg_pos = all_dof_actions[self.config.leg_joint2motor_idx]
-#         self.target_upper_pos = all_dof_actions[self.config.arm_waist_joint2motor_idx]
+        self.target_leg_pos = all_dof_actions[self.config.leg_joint2motor_idx]
+        self.target_upper_pos = all_dof_actions[self.config.arm_waist_joint2motor_idx]
 
-#         # Build low cmd
-#         for i in range(len(self.config.leg_joint2motor_idx)):
-#             motor_idx = self.config.leg_joint2motor_idx[i]
-#             self.low_cmd.motor_cmd[motor_idx].q = self.target_leg_pos[i]
-#             self.low_cmd.motor_cmd[motor_idx].qd = 0
-#             self.low_cmd.motor_cmd[motor_idx].kp = self.config.kps[i] * 1.05
-#             self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i] * 1.0
-#             self.low_cmd.motor_cmd[motor_idx].tau = 0
+        # Build low cmd
+        for i in range(len(self.config.leg_joint2motor_idx)):
+            motor_idx = self.config.leg_joint2motor_idx[i]
+            # self.low_cmd.motor_cmd[motor_idx].mode = 0
+            self.low_cmd.motor_cmd[motor_idx].q = self.target_leg_pos[i]
+            self.low_cmd.motor_cmd[motor_idx].qd = 0
+            self.low_cmd.motor_cmd[motor_idx].kp = self.config.kps[i] * 1.0
+            self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i] * 1.0
+            self.low_cmd.motor_cmd[motor_idx].tau = 0
 
-#         for i in range(len(self.config.arm_waist_joint2motor_idx)):
-#             motor_idx = self.config.arm_waist_joint2motor_idx[i]
-#             self.low_cmd.motor_cmd[motor_idx].q = self.target_upper_pos[i]
-#             self.low_cmd.motor_cmd[motor_idx].qd = 0
-#             self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] * 1.05
-#             self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] * 1.0
-#             self.low_cmd.motor_cmd[motor_idx].tau = 0
+        for i in range(len(self.config.arm_waist_joint2motor_idx)):
+            motor_idx = self.config.arm_waist_joint2motor_idx[i]
+            # self.low_cmd.motor_cmd[motor_idx].mode = 0
+            self.low_cmd.motor_cmd[motor_idx].q = self.target_upper_pos[i] 
+            self.low_cmd.motor_cmd[motor_idx].qd = 0
+            self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] * 1.05
+            self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] * 1.0
+            self.low_cmd.motor_cmd[motor_idx].tau = 0
 
-#         # send the command
-#         self.send_cmd(self.low_cmd)
+        # send the command
+        self.send_cmd(self.low_cmd)
 
-#         # update history, push the latest to the front, drop the oldest from the end
-#         self.ang_vel_buf = np.concatenate((ang_vel, self.ang_vel_buf[:-3]), axis=-1, dtype=np.float32)
-#         self.lin_vel_buf = np.concatenate((lin_vel, self.lin_vel_buf[:-3]), axis=-1, dtype=np.float32)
-#         self.proj_g_buf = np.concatenate((gravity_orientation, self.proj_g_buf[:-3] ), axis=-1, dtype=np.float32)
-#         self.dof_pos_buf = np.concatenate((qj_obs, self.dof_pos_buf[:-23] ), axis=-1, dtype=np.float32)
-#         self.dof_vel_buf = np.concatenate((dqj_obs, self.dof_vel_buf[:-23] ), axis=-1, dtype=np.float32)
-#         self.action_buf = np.concatenate((self.action, self.action_buf[:-23] ), axis=-1, dtype=np.float32)
-#         self.ref_motion_phase_buf = np.concatenate((np.array([self.ref_motion_phase]), self.ref_motion_phase_buf[:-1]), axis=-1, dtype=np.float32)   
+        # update history, push the latest to the front, drop the oldest from the end
+        self.ang_vel_buf = np.concatenate((ang_vel, self.ang_vel_buf[:-3]), axis=-1, dtype=np.float32)
+        self.lin_vel_buf = np.concatenate((lin_vel, self.lin_vel_buf[:-3]), axis=-1, dtype=np.float32)
+        self.proj_g_buf = np.concatenate((gravity_orientation, self.proj_g_buf[:-3] ), axis=-1, dtype=np.float32)
+        self.dof_pos_buf = np.concatenate((qj_obs, self.dof_pos_buf[:-23] ), axis=-1, dtype=np.float32)
+        self.dof_vel_buf = np.concatenate((dqj_obs, self.dof_vel_buf[:-23] ), axis=-1, dtype=np.float32)
+        self.action_buf = np.concatenate((self.action, self.action_buf[:-23] ), axis=-1, dtype=np.float32)
+        self.ref_motion_phase_buf = np.concatenate((np.array([self.ref_motion_phase]), self.ref_motion_phase_buf[:-1]), axis=-1, dtype=np.float32)   
         
-#         time.sleep(self.config.control_dt * 0.94) # run every control_dt seconds
+        time.sleep(self.config.control_dt * 0.9) # run every control_dt seconds
 
-#         # """Callback function to handle incoming messages."""
-#         # current_time = time.time()
-#         # read_dt = current_time - self.last_time
-#         # self.last_time = current_time
+        """Callback function to handle incoming messages."""
+        current_time = time.time()
+        read_dt = current_time - self.last_time
+        self.last_time = current_time
 
-#         # if read_dt > 0:
-#         #     print(f"Published message at {1/read_dt:.2f} Hz")  # Print the actual receiving fr
+        if read_dt > 0:
+            print(f"Published message at {1/read_dt:.2f} Hz")  # Print the actual receiving fr
+
+    def clear_phase(self):
+        self.ref_motion_phase = 0.0
+        self.ref_motion_phase_buf = np.zeros(1 * self.history_length, dtype=np.float32)
+        self.lin_vel_buf = np.zeros(3 * self.history_length, dtype=np.float32)
+        self.ang_vel_buf = np.zeros(3 * self.history_length, dtype=np.float32)
+        self.proj_g_buf = np.zeros(3 * self.history_length, dtype=np.float32)
+        self.dof_pos_buf = np.zeros(23 * self.history_length, dtype=np.float32)
+        self.dof_vel_buf = np.zeros(23 * self.history_length, dtype=np.float32)
+        self.action_buf = np.zeros(23 * self.history_length, dtype=np.float32)
+
+enable_asap = 0
 
 if __name__ == "__main__":
     import argparse
@@ -583,6 +584,7 @@ if __name__ == "__main__":
     ChannelFactoryInitialize(channel, args.net)
     print("DDS communication initialized.")
 
+    asap_controller = ASAPController(config)
     controller = StandController()
 
     if real_deploy:
@@ -597,8 +599,16 @@ if __name__ == "__main__":
 
     while True:
         try:
-            controller.run()
+            if enable_asap:
+                asap_controller.run()
+            else:
+                controller.run()
             # Press the select key to exit
+            if controller.key_listener.is_pressed('o'):
+                asap_controller.clear_phase()
+                enable_asap = 1
+            if controller.key_listener.is_pressed('p'):
+                enable_asap = 0
             if controller.remote_controller.button[KeyMap.select] == 1:
                 break
         except KeyboardInterrupt:

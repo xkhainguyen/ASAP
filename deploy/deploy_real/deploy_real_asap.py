@@ -243,7 +243,7 @@ class Controller:
         # imu_state quaternion: w, x, y, z
         quat = self.low_state.imu_state.quaternion
         from scipy.spatial.transform import Rotation as R
-        rotation_quaternion = R.from_euler('y', 0.1).as_quat()  # ('x', angle) creates a rotation quaternion
+        rotation_quaternion = R.from_euler('y', 0.0).as_quat()  # ('x', angle) creates a rotation quaternion
         rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
         quat = rotated_quaternion.as_quat()
 

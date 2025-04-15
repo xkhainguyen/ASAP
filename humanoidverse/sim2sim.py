@@ -37,12 +37,15 @@ if __name__ == "__main__":
 
 
     # motion 2
-    policy_path = "logs/MotionTracking/20250414_144106-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_3000.onnx" # small DR
+    # policy_path = "logs/MotionTracking/20250414_144106-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_3000.onnx" # small DR
     # policy_path = "logs/MotionTracking/20250414_170022-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_11000.onnx" # no DR
+
+    # motion 3
+    policy_path = "logs/MotionTracking/20250415_120557-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_5200.onnx"
 
     # motion_length = 3.933 # seconds from loginfo
     # motion_length = 3.967
-    motion_length = 4.067
+    motion_length = 4.0
     xml_path = "humanoidverse/data/robots/g1/g1_29dof_anneal_23dof.xml"
     print("policy_path: ", policy_path)
     print("xml_path   : ", xml_path)
@@ -126,8 +129,8 @@ if __name__ == "__main__":
     d.qpos[7:] = np.array([ -0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
                             -0.1, 0.0, 0.0, 0.3, -0.2, -0.0, 
                             0.0, 0.0, 0.0, 
-                            0.0, 0.0, 0.0, 1.57, 
-                            0.0, 0.0, 0.0, 1.57 ], dtype=np.float32)
+                            0.0, 0.0, 0.0, 0.0, 
+                            0.0, 0.0, 0.0, 0.0 ], dtype=np.float32)
     m.opt.timestep = simulation_dt
 
 
@@ -157,7 +160,7 @@ if __name__ == "__main__":
                 dqj = d.qvel[6:]    
                 quat = d.qpos[3:7]   
                 from scipy.spatial.transform import Rotation as R
-                rotation_quaternion = R.from_euler('y', 0.25).as_quat()  # ('x', angle) creates a rotation quaternion
+                rotation_quaternion = R.from_euler('y', 0.0).as_quat()  # ('x', angle) creates a rotation quaternion
                 rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
                 quat = rotated_quaternion.as_quat()
 
