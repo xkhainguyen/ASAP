@@ -32,6 +32,7 @@ if __name__ == "__main__":
 
     # motion 1
     # policy_path = "logs/MotionTracking/20250414_143940-MotionTracking_motion1-motion_tracking-g1_29dof_anneal_23dof/exported/model_2500.onnx" # small DR
+    policy_path = "logs/MotionTracking/20250416_091150-MotionTracking_motion1-motion_tracking-g1_29dof_anneal_23dof/exported/model_6400.onnx" # small DR 2
     # policy_path = "logs/MotionTracking/20250414_170657-MotionTracking_motion1-motion_tracking-g1_29dof_anneal_23dof/exported/model_7500.onnx" # no DR
     # policy_path = "logs/MotionTracking/20250414_170657-MotionTracking_motion1-motion_tracking-g1_29dof_anneal_23dof/exported/model_2500.onnx" # no DR
 
@@ -41,7 +42,7 @@ if __name__ == "__main__":
     # policy_path = "logs/MotionTracking/20250414_170022-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_11000.onnx" # no DR
 
     # motion 3
-    policy_path = "logs/MotionTracking/20250415_120557-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_10000.onnx"
+    # policy_path = "logs/MotionTracking/20250415_120557-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_10000.onnx"
 
     # motion_length = 3.933 # seconds from loginfo
     # motion_length = 3.967
@@ -73,8 +74,8 @@ if __name__ == "__main__":
                                   0.0, 0.0, 0.0, 0.0, 
                                   0.0, 0.0, 0.0, 0.0 ], dtype=np.float32)  #TODO: offset the ankles instead of delta action
     
-    kps = np.array([ 100, 100, 100, 200, 20, 20, 
-                     100, 100, 100, 200, 20, 20, 
+    kps = np.array([ 100, 100, 100, 200, 40, 20, 
+                     100, 100, 100, 200, 40, 20, 
                      400, 400, 400, 
                      90,   60,  20, 60, 
                      90,   60,  20, 60 ], dtype=np.float32)
@@ -160,7 +161,7 @@ if __name__ == "__main__":
                 dqj = d.qvel[6:]    
                 quat = d.qpos[3:7]   
                 from scipy.spatial.transform import Rotation as R
-                rotation_quaternion = R.from_euler('y', 0.0).as_quat()  # ('x', angle) creates a rotation quaternion
+                rotation_quaternion = R.from_euler('y', -0.2).as_quat()  # ('x', angle) creates a rotation quaternion
                 rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
                 quat = rotated_quaternion.as_quat()
 
