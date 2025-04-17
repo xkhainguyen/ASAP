@@ -353,7 +353,7 @@ class ASAPConfig:
         self.imu_type = "pelvis"
         self.lowcmd_topic = "rt/lowcmd"
         self.lowstate_topic = "rt/lowstate"
-        self.policy_path = "logs/MotionTracking/20250416_091150-MotionTracking_motion1-motion_tracking-g1_29dof_anneal_23dof/exported/model_6400.onnx"
+        self.policy_path = "logs/MotionTracking/20250416_090608-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_41200.onnx"
         self.leg_joint2motor_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         self.kps = [100, 100, 100, 200, 40, 20, 100, 100, 100, 200, 40, 20]
         self.kds = [2.5, 2.5, 2.5, 5.0, 0.2, 0.2, 2.5, 2.5, 2.5, 5.0, 0.2, 0.2]
@@ -491,7 +491,7 @@ class ASAPController:
         motion_length = 4.0
         if (self.ref_motion_phase < 1.0): # always in [0, 1]
             # ref_motion_phase += 0.0315  #TODO: compute the phase based on motion length and episode length
-            self.ref_motion_phase += 1.0 * self.config.control_dt / motion_length
+            self.ref_motion_phase += 1.2 * self.config.control_dt / motion_length
         else:
             self.ref_motion_phase = 1.0
 
