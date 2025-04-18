@@ -353,7 +353,11 @@ class ASAPConfig:
         self.imu_type = "pelvis"
         self.lowcmd_topic = "rt/lowcmd"
         self.lowstate_topic = "rt/lowstate"
-        self.policy_path = "logs/MotionTracking/20250416_090608-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_41200.onnx"
+        # self.policy_path = "logs/MotionTracking/20250416_090608-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_41200.onnx"
+        # self.policy_path = "logs/MotionTracking/20250416_115313-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_49600.onnx"
+        # self.policy_path = "logs/MotionTracking/20250417_111523-khuyen_vai-motion_tracking-g1_29dof_anneal_23dof/exported/model_35000.onnx"
+        # self.policy_path = "logs/MotionTracking/20250417_111501-cuc_go-motion_tracking-g1_29dof_anneal_23dof/exported/model_54500.onnx"
+        self.policy_path = "logs/MotionTracking/20250418_115620-cuc-motion_tracking-g1_29dof_anneal_23dof/exported/model_34000.onnx"
         self.leg_joint2motor_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         self.kps = [100, 100, 100, 200, 40, 20, 100, 100, 100, 200, 40, 20]
         self.kds = [2.5, 2.5, 2.5, 5.0, 0.2, 0.2, 2.5, 2.5, 2.5, 5.0, 0.2, 0.2]
@@ -366,19 +370,19 @@ class ASAPConfig:
                                           15, 16, 17, 18, 19, 20, 21, 
                                           22, 23, 24, 25, 26, 27, 28]
         self.arm_waist_kps = [300, 300, 300,
-                                       100, 100, 50, 50, 20, 20, 20,
-                                       100, 100, 50, 50, 20, 20, 20]
+                            100, 100, 50, 50, 20, 20, 20,
+                            100, 100, 50, 50, 20, 20, 20]
         self.arm_waist_kds = [3, 3, 3, 
-                                       2, 2, 2, 2, 1, 1, 1,
-                                       2, 2, 2, 2, 1, 1, 1]
+                            2, 2, 2, 2, 1, 1, 1,
+                            2, 2, 2, 2, 1, 1, 1]
         self.arm_waist_target = np.array([0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0,
                                           0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
         self.action_joint2motor_idx = np.array([0, 1, 2, 3, 4, 5, 
-                                                    6, 7, 8, 9, 10, 11,
-                                                    12, 13, 14,
-                                                    15, 16, 17, 18, 
-                                                    22, 23, 24, 25])
+                                                6, 7, 8, 9, 10, 11,
+                                                12, 13, 14,
+                                                15, 16, 17, 18, 
+                                                22, 23, 24, 25])
         self.ang_vel_scale = 0.25
         self.dof_pos_scale = 1.0
         self.dof_vel_scale = 0.05
@@ -473,7 +477,7 @@ class ASAPController:
 
         # imu_state quaternion: w, x, y, z
         quat = self.low_state.imu_state.quaternion
-        rotation_quaternion = R.from_euler('y', -0.2).as_quat()  # ('x', angle) creates a rotation quaternion
+        rotation_quaternion = R.from_euler('y', -0.0).as_quat()  # ('x', angle) creates a rotation quaternion
         rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
         quat = rotated_quaternion.as_quat()
 
@@ -488,10 +492,28 @@ class ASAPController:
         ang_vel = ang_vel * self.config.ang_vel_scale
         lin_vel = ang_vel * 0.0
 
-        motion_length = 4.0
+        if "cr7" in self.config.policy_path:
+            motion_length = 3.933
+        if "test" in self.config.policy_path:
+            motion_length = 3.967
+        if "motion1" in self.config.policy_path:
+            motion_length = 4.433
+        if "motion2" in self.config.policy_path:
+            motion_length = 4.067
+        if "motion3" in self.config.policy_path:
+            motion_length = 4.1
+        if "khuyen_vai" in self.config.policy_path:
+            motion_length = 7.067
+        if "cuc" in self.config.policy_path:
+            motion_length = 11.167
+        if "cuc_go" in self.config.policy_path:
+            motion_length = 9.167
+
+        
+
         if (self.ref_motion_phase < 1.0): # always in [0, 1]
             # ref_motion_phase += 0.0315  #TODO: compute the phase based on motion length and episode length
-            self.ref_motion_phase += 1.2 * self.config.control_dt / motion_length
+            self.ref_motion_phase += 1.0 * self.config.control_dt / motion_length
         else:
             self.ref_motion_phase = 1.0
 
@@ -524,7 +546,7 @@ class ASAPController:
         # Get the action from the policy network
         onnx_pred = self.policy.run(None, {self.input_name: [obs_buf]})[0][0]
         self.action = onnx_pred
-        self.action = self.filter_action(self.action, cutoff=5.0)
+        # self.action = self.filter_action(self.action, cutoff=5.0)
         
         # transform action to target_dof_pos
         all_dof_actions = np.zeros(29) # hardware order
@@ -545,6 +567,15 @@ class ASAPController:
             self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i] * 1.0
             self.low_cmd.motor_cmd[motor_idx].tau = 0
 
+        # waist roll
+        # waist yaw 
+        # print(self.target_upper_pos[4], self.target_upper_pos[11])
+        # if self.target_upper_pos[4] < 0.1:
+        #     self.target_upper_pos[4] = 0.1
+        # if self.target_upper_pos[11] > -0.1:
+        #     self.target_upper_pos[11] = -0.1 
+        # print(self.target_upper_pos[4], self.target_upper_pos[11])
+
         for i in range(len(self.config.arm_waist_joint2motor_idx)):
             motor_idx = self.config.arm_waist_joint2motor_idx[i]
             # self.low_cmd.motor_cmd[motor_idx].mode = 0
@@ -553,7 +584,7 @@ class ASAPController:
             self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] * 1.0
             self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] * 1.0
             self.low_cmd.motor_cmd[motor_idx].tau = 0
-
+    
         # send the command
         self.send_cmd(self.low_cmd)
 
@@ -568,13 +599,13 @@ class ASAPController:
         
         time.sleep(self.config.control_dt * 0.9) # run every control_dt seconds
 
-        """Callback function to handle incoming messages."""
-        current_time = time.time()
-        read_dt = current_time - self.last_time
-        self.last_time = current_time
+        # """Callback function to handle incoming messages."""
+        # current_time = time.time()
+        # read_dt = current_time - self.last_time
+        # self.last_time = current_time
 
-        if read_dt > 0:
-            print(f"Published message at {1/read_dt:.2f} Hz")  # Print the actual receiving fr
+        # if read_dt > 0:
+        #     print(f"Published message at {1/read_dt:.2f} Hz")  # Print the actual receiving fr
 
     def clear_phase(self):
         self.ref_motion_phase = 0.0

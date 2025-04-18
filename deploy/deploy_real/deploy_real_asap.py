@@ -261,7 +261,7 @@ class Controller:
         motion_length = 4.067
         if (self.ref_motion_phase < 1.0): # always in [0, 1]
             # ref_motion_phase += 0.0315  #TODO: compute the phase based on motion length and episode length
-            self.ref_motion_phase += 1.0 * self.config.control_dt / motion_length
+            self.ref_motion_phase += 2.0 * self.config.control_dt / motion_length
         else:
             self.ref_motion_phase = 1.0
 
