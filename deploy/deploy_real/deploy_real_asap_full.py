@@ -353,11 +353,15 @@ class ASAPConfig:
         self.imu_type = "pelvis"
         self.lowcmd_topic = "rt/lowcmd"
         self.lowstate_topic = "rt/lowstate"
+
         # self.policy_path = "logs/MotionTracking/20250416_090608-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_41200.onnx"
         # self.policy_path = "logs/MotionTracking/20250416_115313-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_49600.onnx"
         # self.policy_path = "logs/MotionTracking/20250417_111523-khuyen_vai-motion_tracking-g1_29dof_anneal_23dof/exported/model_35000.onnx"
         # self.policy_path = "logs/MotionTracking/20250417_111501-cuc_go-motion_tracking-g1_29dof_anneal_23dof/exported/model_54500.onnx"
-        self.policy_path = "logs/MotionTracking/20250418_115620-cuc-motion_tracking-g1_29dof_anneal_23dof/exported/model_34000.onnx"
+        # self.policy_path = "logs/MotionTracking/20250418_115620-cuc-motion_tracking-g1_29dof_anneal_23dof/exported/model_34000.onnx"
+        # self.policy_path = "logs/MotionTracking/20250418_134949-khuyen_lai-motion_tracking-g1_29dof_anneal_23dof/exported/model_36600.onnx"
+        self.policy_path = "logs/MotionTracking/20250421_102644-hieu-motion_tracking-g1_29dof_anneal_23dof/exported/model_124700.onnx"
+
         self.leg_joint2motor_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         self.kps = [100, 100, 100, 200, 40, 20, 100, 100, 100, 200, 40, 20]
         self.kds = [2.5, 2.5, 2.5, 5.0, 0.2, 0.2, 2.5, 2.5, 2.5, 5.0, 0.2, 0.2]
@@ -477,7 +481,7 @@ class ASAPController:
 
         # imu_state quaternion: w, x, y, z
         quat = self.low_state.imu_state.quaternion
-        rotation_quaternion = R.from_euler('y', -0.0).as_quat()  # ('x', angle) creates a rotation quaternion
+        rotation_quaternion = R.from_euler('y', 0.2).as_quat()  # ('x', angle) creates a rotation quaternion
         rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
         quat = rotated_quaternion.as_quat()
 
@@ -504,11 +508,14 @@ class ASAPController:
             motion_length = 4.1
         if "khuyen_vai" in self.config.policy_path:
             motion_length = 7.067
+        if "khuyen_lai" in self.config.policy_path:
+            motion_length = 8.33
         if "cuc" in self.config.policy_path:
             motion_length = 11.167
         if "cuc_go" in self.config.policy_path:
             motion_length = 9.167
-
+        if "hieu" in self.config.policy_path:
+            motion_length = 8.33
         
 
         if (self.ref_motion_phase < 1.0): # always in [0, 1]
@@ -563,8 +570,8 @@ class ASAPController:
             # self.low_cmd.motor_cmd[motor_idx].mode = 0
             self.low_cmd.motor_cmd[motor_idx].q = self.target_leg_pos[i]
             self.low_cmd.motor_cmd[motor_idx].qd = 0
-            self.low_cmd.motor_cmd[motor_idx].kp = self.config.kps[i] * 1.0
-            self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i] * 1.0
+            self.low_cmd.motor_cmd[motor_idx].kp = self.config.kps[i] * 1.05
+            self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i] * 1.05
             self.low_cmd.motor_cmd[motor_idx].tau = 0
 
         # waist roll
@@ -581,8 +588,8 @@ class ASAPController:
             # self.low_cmd.motor_cmd[motor_idx].mode = 0
             self.low_cmd.motor_cmd[motor_idx].q = self.target_upper_pos[i] 
             self.low_cmd.motor_cmd[motor_idx].qd = 0
-            self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] * 1.0
-            self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] * 1.0
+            self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] * 1.05
+            self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] * 1.05
             self.low_cmd.motor_cmd[motor_idx].tau = 0
     
         # send the command
