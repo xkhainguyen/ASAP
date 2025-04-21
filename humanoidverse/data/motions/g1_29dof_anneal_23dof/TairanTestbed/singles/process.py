@@ -32,7 +32,7 @@ def split_pkl_file(input_file):
 
 if __name__ == "__main__":
     # Input file path
-    input_pkl = "bac_blink.pkl"
+    input_pkl = "khai_leg_move.pkl"
 
     # Split the .pkl file
     split_pkl_file(input_pkl)
