@@ -10,7 +10,7 @@ from isaac_utils.rotations import (
     quat_mul,
     quat_rotate_inverse,
     xyzw_to_wxyz,
-    wxyz_to_xyzw
+    # wxyz_to_xyzw
 )
 # from isaacgym import gymtorch, gymapi, gymutil
 from humanoidverse.envs.env_utils.visualization import Point

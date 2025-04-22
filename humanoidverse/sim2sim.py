@@ -178,7 +178,7 @@ if __name__ == "__main__":
                 
                 if (ref_motion_phase < 1.0): # always in [0, 1]
                     # ref_motion_phase += 0.0315  #TODO: compute the phase based on motion length and episode length
-                    ref_motion_phase += 1.0 * control_dt / motion_length
+                    ref_motion_phase += 2.0 * control_dt / motion_length
                 else:
                     ref_motion_phase = 1.0
                 
