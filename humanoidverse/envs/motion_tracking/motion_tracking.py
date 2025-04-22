@@ -11,9 +11,9 @@ from isaac_utils.rotations import (
     quat_mul,
     quat_conjugate,
     quat_to_angle_axis,
-    # quat_rotate_inverse,
+    quat_rotate_inverse,
     xyzw_to_wxyz,
-    # wxyz_to_xyzw
+    wxyz_to_xyzw
 )
 # from isaacgym import gymtorch, gymapi, gymutil
 from humanoidverse.envs.env_utils.visualization import Point
@@ -284,8 +284,7 @@ class LeggedRobotMotionTracking(LeggedRobotBase):
         self.dif_global_body_pos = ref_body_pos_extend - self._rigid_body_pos_extend
         # import ipdb; ipdb.set_trace()
         ## diff compute - kinematic rotation
-        # self.dif_global_body_rot = quat_mul(ref_body_rot_extend, quat_conjugate(self._rigid_body_rot_extend, w_last=True), w_last=True)
-        self.dif_global_body_rot = ref_body_rot_extend - self._rigid_body_rot_extend
+        self.dif_global_body_rot = quat_mul(ref_body_rot_extend, quat_conjugate(self._rigid_body_rot_extend, w_last=True), w_last=True)
         
         ## diff compute - kinematic velocity
         self.dif_global_body_vel = ref_body_vel_extend - self._rigid_body_vel_extend
@@ -348,7 +347,7 @@ class LeggedRobotMotionTracking(LeggedRobotBase):
         if not (torch.all(self._ref_motion_phase >= 0) and torch.all(self._ref_motion_phase <= 1.05)): # hard coded 1.05 because +1 will exceed 1
             max_phase = self._ref_motion_phase.max()
             # import ipdb; ipdb.set_trace()
-        self._ref_motion_phase = self._ref_motion_phase.unsqueeze(1) * 0.0
+        self._ref_motion_phase = self._ref_motion_phase.unsqueeze(1)
         # import ipdb; ipdb.set_trace()
         # print(f"ref_motion_phase: {self._ref_motion_phase[0].item():.2f}")
         # print(f"ref_motion_length: {self._ref_motion_length[0].item():.2f}")
