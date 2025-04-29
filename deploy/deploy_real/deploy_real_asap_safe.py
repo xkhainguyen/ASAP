@@ -19,7 +19,7 @@ from common.command_helper import create_damping_cmd, create_zero_cmd, init_cmd_
 from common.rotation_helper import get_gravity_orientation, transform_imu_data
 from common.remote_controller import RemoteController, KeyMap, KeyListener
 from common.signal_processing import high_pass_filter, low_pass_filter, rk4_integrate
-from config import Config
+from common.safety_layer import SafetyLayer
 
 np.set_printoptions(precision=4, suppress=True)
 
@@ -109,6 +109,7 @@ class StandController:
         config = StandConfig()
         self.config = config
         self.key_listener = KeyListener()
+        self.safety_layer = SafetyLayer('g1')  
 
         # Initialize the policy network
         self.policy = torch.jit.load(config.policy_path)
@@ -313,6 +314,9 @@ class StandController:
             self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i]
             self.low_cmd.motor_cmd[motor_idx].tau = 0
 
+        # run safety layer 
+        self.safety_layer.run(self.low_state, self.low_cmd)
+        
         # send the command
         self.send_cmd(self.low_cmd)
 

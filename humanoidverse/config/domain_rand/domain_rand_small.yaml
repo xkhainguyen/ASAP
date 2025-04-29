@@ -16,6 +16,7 @@ domain_rand:
   randomize_base_mass : False # replaced by randomize_link_mass
   added_mass_range : [-5., 10.]
 
+  armature : False
 
   randomize_base_com : False
   base_com_range: #kg
