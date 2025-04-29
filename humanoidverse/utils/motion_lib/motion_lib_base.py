@@ -69,6 +69,7 @@ class MotionLibBase():
             self.mode = MotionlibMode.directory
             self._motion_data_load = glob.glob(osp.join(motion_file, "*.pkl"))
         data_list = self._motion_data_load
+
         if self.mode == MotionlibMode.file:
             if min_length != -1:
                 # filtering the data by the length of the motion
@@ -235,7 +236,6 @@ class MotionLibBase():
                      start_idx=0, 
                      max_len=-1, 
                      target_heading = None):
-        # import ipdb; ipdb.set_trace()
 
         motions = []
         _motion_lengths = []
@@ -267,7 +267,6 @@ class MotionLibBase():
         logger.info(f"Sampling motion: {sample_idxes[:5]}, ....")
         logger.info(f"Current motion keys: {self.curr_motion_keys[:5]}, ....")
         logger.info(f"\n\nHEASDADAD\n\n")
-
         motion_data_list = self._motion_data_list[sample_idxes.cpu().numpy()]
         res_acc = self.load_motion_with_skeleton(motion_data_list, self.fix_height, target_heading, max_len)
         for f in track(range(len(res_acc)), description="Loading motions..."):
@@ -276,7 +275,6 @@ class MotionLibBase():
             curr_dt = 1.0 / motion_fps
             num_frames = curr_motion.global_rotation.shape[0]
             curr_len = 1.0 / motion_fps * (num_frames - 1)
-
             if "beta" in motion_file_data:
                 _motion_aa.append(motion_file_data['pose_aa'].reshape(-1, self.num_joints * 3))
                 _motion_bodies.append(curr_motion.gender_beta)
@@ -371,7 +369,6 @@ class MotionLibBase():
             if not isinstance(curr_file, dict) and osp.isfile(curr_file):
                 key = motion_data_list[f].split("/")[-1].split(".")[0]
                 curr_file = joblib.load(curr_file)[key]
-
             seq_len = curr_file['root_trans_offset'].shape[0]
             if max_len == -1 or seq_len < max_len:
                 start, end = 0, seq_len
