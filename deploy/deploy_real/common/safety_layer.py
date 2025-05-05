@@ -3,7 +3,7 @@ import numpy as np
 import time
 from collections import deque
 from scipy.spatial.transform import Rotation as R
-
+import pandas as pd
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelFactoryInitialize
 from unitree_sdk2py.core.channel import ChannelSubscriber, ChannelFactoryInitialize
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_, unitree_hg_msg_dds__LowState_
@@ -30,9 +30,23 @@ class SafetyLayer:
                                               15, 16, 17, 18, 19, 20, 21, 
                                               22, 23, 24, 25, 26, 27, 28]
             
-            # TODO: some torque, velocity, position limits for g1?
-            # max_speed 2m/s
-            # 
+            self.qj_hist = deque(maxlen=5)
+            self.dqj_hist = deque(maxlen=5)
+            self.tauj_hist = deque(maxlen=5)
+            self.omega_hist = deque(maxlen=5)
+            self.acc_hist = deque(maxlen=5)
+            
+            self.max_tilt_angle = np.radians(120)  # 30 degrees
+            self.max_ang_vel = np.array([3.0, 3.0, 3.0])  # rad/s
+            self.max_temp = 60.0  # Celsius
+            self.max_acc_g = 2.0 
+            self.max_joint_torque = 120 #Nm
+            self.max_joint_vel = 10
+            self.max_joint_position = np.pi
+            self.max_up_z = 0.45
+            self.joint_limits = pd.read_csv("deploy/deploy_real/configs/g1_joint_limits.tsv", sep="\t", names=['Joint', 'Lower', 'Upper', 'Torque', 'Velocity'])
+            self.joint_limits_velocity = self.joint_limits['Velocity'].values
+            print(f"Joint limits velocity: {self.joint_limits_velocity}")
 
         elif self.robot == "h1_2":
             self.leg_joint2motor_idx = [0, 1, 2, 3, 4, 5, 
@@ -42,19 +56,9 @@ class SafetyLayer:
                                               20, 21, 22, 23, 24, 25, 26]
 
             # TODO: some torque, velocity, position limits for h12?
-        self.init_safety_threshold()
+        # self.init_safety_threshold()
 
-    def init_safety_threshold(self):
-        self.max_tilt_angle = np.radians(120)  # 30 degrees
-        self.max_ang_vel = np.array([3.0, 3.0, 3.0])  # rad/s
-        self.max_temp = 60.0  # Celsius
-        self.max_acc_g = 2.0 
-        self.max_joint_torque = 120 #Nm
-        self.max_joint_vel = 10
-        self.max_joint_position = np.pi
-        self.max_up_z = 0.45
-
-    def is_falling(self) -> bool:
+    def is_falling(self) -> bool:   
         if self.quat is None:
             return False
         rot = R.from_quat(self.quat)
@@ -70,23 +74,58 @@ class SafetyLayer:
         return is_falling
     
     def is_over_ang_vel_limit(self) -> bool:
-        if self.omega is None:
+        # limit_vel = self.joint_limits['Velocity'].values
+        # for i, j in zip(self.omega, limit_vel):
+        #     if i > j:
+        #         return False
+            
+        # print(f"Omega: {self.omega}")
+        # return True
+        pass
+
+    def is_over_acc_limit(self) -> bool:
+        if self.acc is None:
             return False
-        print(f"Omega: {self.omega} ")
-        return np.any(np.abs(self.omega) > self.max_ang_vel)
+        # Check if the acceleration exceeds the limit
+        acc_magnitude = np.linalg.norm(self.acc)
+        if acc_magnitude > self.max_acc_g:
+            print(f"Acceleration exceeds limit: {acc_magnitude} g")
+            return True
+        return False
+        
+    def is_exceeding_actions(self, n=5) -> bool:
+        if len(self.dqj_hist) < n:
+            return False
+        
+        for dqj in list(self.dqj_hist)[-n:]:
+            if np.any(np.abs(dqj) > self.max_joint_vel):
+                print(f"Joint velocity exceeds limit: {dqj}")
+                return True
+        return False
+        # Check if the actions exceed the limits
+
+
+
     
     def is_over_joint_vel_limit(self) -> bool:
-        pass
+        if self.dqj is None:
+            return False
+        return np.any(np.abs(self.dqj) > self.joint_limits_velocity)
 
     def is_over_joint_torque_limit(self) -> bool:
         if self.tauj is None:
             return False
-        print(f"Tauq: {self.tauj}")
-        return np.any(np.abs(self.tauj) > self.max_joint_torque)
+        over_limit = np.any(np.abs(self.tauj) > self.max_joint_torque)
+        return over_limit
         
     def is_over_joint_position_limit(self) -> bool:
-        pass
-        # return np.any((self.qj < self.joint_position_limits_min) | (self.qj > self.joint_position_limits_max))
+        if self.qj is None:
+            return False
+        joint_limits = self.joint_limits[['Lower', 'Upper']].values
+        self.joint_position_limits_min = joint_limits[:, 0]
+        self.joint_position_limits_max = joint_limits[:, 1]
+        over_limit = np.any((self.qj < self.joint_position_limits_min) | (self.qj > self.joint_position_limits_max))
+        return over_limit
 
     def is_overheating(self) -> bool:
         pass
@@ -110,7 +149,11 @@ class SafetyLayer:
             self.tauj[i] = low_state.motor_state[dof_idx[i]].tau_est
             self.motor_temps[i] = low_state.motor_state[dof_idx[i]].temperature
 
+        self.qj_hist.append(self.qj.copy())
+        self.dqj_hist.append(self.dqj.copy())
+        self.tauj_hist.append(self.tauj.copy())
         print(f"Motor temperatures: {self.motor_temps}")
+
     def run(self, low_state: LowStateHG, low_cmd: LowCmdHG):
         # PLACE THIS RIGHT BEFORE SEND_CMD()
         # TODO: Check for safety conditions

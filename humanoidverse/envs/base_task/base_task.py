@@ -19,6 +19,7 @@ from termcolor import colored
 class BaseTask():
     def __init__(self, config, device, is_training = True):
         self.config = config
+        self.is_training = is_training
         # optimization flags for pytorch JIT
         torch._C._jit_set_profiling_mode(False)
         torch._C._jit_set_profiling_executor(False)

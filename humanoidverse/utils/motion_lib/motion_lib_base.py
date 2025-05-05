@@ -70,7 +70,7 @@ class MotionLibBase():
             self.start_stream_idx = 0
         else:
             self.start_stream_idx = 8
-        print(self.start_stream_idx)
+        logger.info(f"Start Stream Indx: {self.start_stream_idx}")
         self.num_cuda_streams = 16
         self.cuda_streams = [torch.cuda.Stream(device=self._device) for _ in range(self.num_cuda_streams)]
         self.experiment = False
@@ -202,7 +202,9 @@ class MotionLibBase():
 
         blend = blend.unsqueeze(-1)
         blend_exp = blend.unsqueeze(-1)
-        torch.cuda.synchronize(self._device)
+        # torch.cuda.synchronize(self._device)
+        self.cuda_streams[self.start_stream_idx + 0].synchronize()
+        self.cuda_streams[self.start_stream_idx + 1].synchronize()
         dof_pos = self.index_and_blend_gpu_tensor("dof_pos", f0l, f1l, blend, None, 0 + self.start_stream_idx)
         dof_vel = self.index_and_blend_gpu_tensor("dvs", f0l, f1l, blend, None, 1 + self.start_stream_idx)
         tensor_names = ["gts_t", "grs_t", "gvs_t", "gavs_t"]
@@ -214,7 +216,9 @@ class MotionLibBase():
                     tensor_names
                 )
             )
-        torch.cuda.synchronize(self._device)
+        # torch.cuda.synchronize(self._device)
+        self.cuda_streams[self.start_stream_idx + 0].synchronize()
+        self.cuda_streams[self.start_stream_idx + 1].synchronize()
         rg_pos_t, rg_rot_t, body_vel_t, body_ang_vel_t = indexed_tensors
 
         rg_pos_t0, rg_pos_t1 = rg_pos_t[0], rg_pos_t[1]
@@ -256,12 +260,21 @@ class MotionLibBase():
         blend = blend.unsqueeze(-1)
         blend_exp = blend.unsqueeze(-1)
 
-        torch.cuda.synchronize(self._device)
+        # torch.cuda.synchronize(self._device)
+        self.cuda_streams[self.start_stream_idx + 2].synchronize()
+        self.cuda_streams[self.start_stream_idx + 3].synchronize()
+        self.cuda_streams[self.start_stream_idx + 4].synchronize()
+        self.cuda_streams[self.start_stream_idx + 5].synchronize()
+
         body_vel = self.index_and_blend_gpu_tensor("gvs", f0l, f1l, blend_exp, None, 2 + self.start_stream_idx)
         body_ang_vel = self.index_and_blend_gpu_tensor("gavs", f0l, f1l, blend_exp, None, 3 +  self.start_stream_idx)
         rg_pos = self.index_and_blend_gpu_tensor("gts", f0l, f1l, blend_exp, offset, 4 + self.start_stream_idx)
-        rb_rot = self.index_gpu_tensor("grs", indices, 5)
-        torch.cuda.synchronize(self._device)
+        rb_rot = self.index_gpu_tensor("grs", indices, 5 + self.start_stream_idx)
+        # torch.cuda.synchronize(self._device)
+        self.cuda_streams[self.start_stream_idx + 2].synchronize()
+        self.cuda_streams[self.start_stream_idx + 3].synchronize()
+        self.cuda_streams[self.start_stream_idx + 4].synchronize()
+        self.cuda_streams[self.start_stream_idx + 5].synchronize()
         rb_rot0, rb_rot1 = rb_rot[0], rb_rot[1]
         rb_rot = slerp(rb_rot0, rb_rot1, blend_exp)
         
@@ -284,13 +297,17 @@ class MotionLibBase():
         frame_idx0, frame_idx1, blend = self._calc_frame_blend(motion_times, motion_len, num_frames, dt)
         f0l = frame_idx0 + self.length_starts[motion_ids]
         f1l = frame_idx1 + self.length_starts[motion_ids]
-
         blend = blend.unsqueeze(-1)
-        torch.cuda.synchronize(self._device)
+        self.cuda_streams[self.start_stream_idx + 6].synchronize()
+        self.cuda_streams[self.start_stream_idx + 7].synchronize()
+
+        # torch.cuda.synchronize(self._device)
         dof_pos = self.index_and_blend_gpu_tensor("dof_pos", f0l, f1l, blend, None, 6 + self.start_stream_idx)
         dof_vel = self.index_and_blend_gpu_tensor("dvs", f0l, f1l, blend, None, 7 + self.start_stream_idx)
-        torch.cuda.synchronize(self._device)
-
+        # torch.cuda.synchronize(self._device)
+        # print(f"start stream idx: {self.start_stream_idx}")
+        self.cuda_streams[self.start_stream_idx + 6].synchronize()
+        self.cuda_streams[self.start_stream_idx + 7].synchronize()
         return_dict = {}
 
         return_dict.update({

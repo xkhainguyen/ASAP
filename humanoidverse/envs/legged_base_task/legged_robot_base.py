@@ -24,9 +24,9 @@ from loguru import logger
 import copy
 
 class LeggedRobotBase(BaseTask):
-    def __init__(self, config, device):
+    def __init__(self, config, device, is_training = True):
         self.init_done = False
-        super().__init__(config, device)
+        super().__init__(config, device, is_training)
         self._domain_rand_config()
         self._prepare_reward_function()
         self.history_handler = HistoryHandler(self.num_envs, config.obs.obs_auxiliary, config.obs.obs_dims, device)

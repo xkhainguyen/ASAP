@@ -106,7 +106,7 @@ def main(config: OmegaConf):
     #     fabric.seed_everything(config.seed + rank)
     #     seeding(config.seed + rank, torch_deterministic=config.torch_deterministic)
     config.env.config.save_rendering_dir = str(Path(config.experiment_dir) / "renderings_training")
-    env: BaseEnv = instantiate(config=config.env, device=device)
+    env: BaseEnv = instantiate(config=config.env, device=device, is_training=True)
 
 
     experiment_save_dir = Path(config.experiment_dir)
@@ -116,7 +116,7 @@ def main(config: OmegaConf):
     with open(experiment_save_dir / "config.yaml", "w") as file:
         OmegaConf.save(unresolved_conf, file)
 
-    algo: BaseAlgo = instantiate(device=device, env=env, config=config.algo, log_dir=experiment_save_dir, is_training = True)
+    algo: BaseAlgo = instantiate(device=device, env=env, config=config.algo, log_dir=experiment_save_dir)
     algo.setup()
     # import ipdb;    ipdb.set_trace()
     if config.checkpoint is not None:
