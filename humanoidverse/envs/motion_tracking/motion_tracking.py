@@ -233,8 +233,7 @@ class LeggedRobotMotionTracking(LeggedRobotBase):
         B = self.motion_ids.shape[0]
         motion_times = (self.episode_length_buf + 1) * self.dt + self.motion_start_times # next frames so +1
         # motion_res = self._get_state_from_motionlib_cache_trimesh(self.motion_ids, motion_times, offset= offset)
-        motion_res = self._motion_lib.get_motion_state(self.motion_ids, motion_times, offset=offset)
-
+        motion_res = self._motion_lib.get_motion_state_pcoc(self.motion_ids, motion_times, offset=offset)
         ref_body_pos_extend = motion_res["rg_pos_t"]
         self.ref_body_pos_extend[:] = ref_body_pos_extend # for visualization and analysis
         ref_body_vel_extend = motion_res["body_vel_t"] # [num_envs, num_markers, 3]
@@ -400,7 +399,7 @@ class LeggedRobotMotionTracking(LeggedRobotBase):
         if self.custom_origins: # trimesh
             motion_times = (self.episode_length_buf) * self.dt + self.motion_start_times # next frames so +1
             offset = self.env_origins
-            motion_res = self._motion_lib.get_motion_state(self.motion_ids, motion_times, offset=offset)
+            motion_res = self._motion_lib.get_motion_state_rrs(self.motion_ids, motion_times, offset=offset)
             self.simulator.robot_root_states[env_ids, :3] = motion_res['root_pos'][env_ids]
             # self.robot_root_states[env_ids, 2] += 0.04 # in case under the terrain
             if self.config.simulator.config.name == 'isaacgym':
@@ -417,7 +416,7 @@ class LeggedRobotMotionTracking(LeggedRobotBase):
         else:
             motion_times = (self.episode_length_buf) * self.dt + self.motion_start_times # next frames so +1
             offset = self.env_origins
-            motion_res = self._motion_lib.get_motion_state(self.motion_ids, motion_times, offset=offset)
+            motion_res = self._motion_lib.get_motion_state_rrs(self.motion_ids, motion_times, offset=offset)
 
 
             root_pos_noise = self.config.init_noise_scale.root_pos * self.config.noise_to_initial_level
@@ -468,7 +467,7 @@ class LeggedRobotMotionTracking(LeggedRobotBase):
 
         motion_times = (self.episode_length_buf) * self.dt + self.motion_start_times # next frames so +1
         offset = self.env_origins
-        motion_res = self._motion_lib.get_motion_state(self.motion_ids, motion_times, offset=offset)
+        motion_res = self._motion_lib.get_motion_state_rd(self.motion_ids, motion_times, offset=offset)
 
         dof_pos_noise = self.config.init_noise_scale.dof_pos * self.config.noise_to_initial_level
         dof_vel_noise = self.config.init_noise_scale.dof_vel * self.config.noise_to_initial_level

@@ -1,4 +1,6 @@
 import glob
+import gc
+import os
 import os.path as osp
 import numpy as np
 import joblib
@@ -26,6 +28,8 @@ from isaac_utils.rotations import(
     quat_conjugate,
 )
 
+from concurrent.futures import ThreadPoolExecutor
+
 class FixHeightMode(Enum):
     no_fix = 0
     full_fix = 1
@@ -41,6 +45,9 @@ def to_torch(tensor):
         return tensor
     else:
         return torch.from_numpy(tensor)
+    
+def indexing_tensor(tensor: torch.Tensor, indices: torch.Tensor):
+    return tensor[indices]
 
 class MotionLibBase():
     def __init__(self, motion_lib_cfg, num_envs, device):
@@ -59,6 +66,14 @@ class MotionLibBase():
         self.setup_constants(fix_height = False,  multi_thread = False)
         if flags.real_traj:
             self.track_idx = self._motion_data_load[next(iter(self._motion_data_load))].get("track_idx", [19, 24, 29])
+        
+        self.num_cuda_streams = 8
+        self.cuda_streams = [torch.cuda.Stream(device=self._device) for _ in range(self.num_cuda_streams)]
+        self.experiment = False
+        self.offload_dir = "/workspace/data/ASAP/tensors"
+        if self.experiment:
+            os.makedirs(self.offload_dir, exist_ok=True)
+
         return
         
     def load_data(self, motion_file, min_length=-1, im_eval = False):
@@ -69,7 +84,6 @@ class MotionLibBase():
             self.mode = MotionlibMode.directory
             self._motion_data_load = glob.glob(osp.join(motion_file, "*.pkl"))
         data_list = self._motion_data_load
-
         if self.mode == MotionlibMode.file:
             if min_length != -1:
                 # filtering the data by the length of the motion
@@ -112,8 +126,153 @@ class MotionLibBase():
 
         action = self._motion_actions[f0l]
         return action
+    
+    def has_tensor(self, tensor_name: str) -> bool:
+        if isinstance(getattr(self, tensor_name, None), torch.Tensor):
+            return True
+        if osp.isfile(osp.join(self.offload_dir, f"{tensor_name}.pt")):
+            return True
+        return False
+    
+    def onload_tensor(self, tensor_name: str, device: str) -> None:
+        if self.experiment:
+            if isinstance(getattr(self, tensor_name, None), torch.Tensor):
+                setattr(self, tensor_name, getattr(self, tensor_name).to(device))
+            else:
+                tensor_path = osp.join(self.offload_dir, f"{tensor_name}.pt")
+                setattr(self, tensor_name, torch.load(tensor_path, map_location=device))
+        
+    def offload_tensor(self, tensor_name: str, device: str) -> None:
+        if self.experiment:
+            if isinstance(getattr(self, tensor_name, None), torch.Tensor):
+                if device == "cpu":
+                    setattr(self, tensor_name, getattr(self, tensor_name).cpu())
+                elif device == "disk":
+                    tensor_path = osp.join(self.offload_dir, f"{tensor_name}.pt")
+                    torch.save(getattr(self, tensor_name), tensor_path)
+                else:
+                    raise ValueError(f"Invalid device: {device}. Must be one of [\"cpu\", \"disk\"]")
+            
+    def free_tensor(self, tensor_name: str) -> None:
+        if self.experiment:
+            delattr(self, tensor_name)
+            gc.collect()
+            torch.cuda.empty_cache()
 
-    def get_motion_state(self, motion_ids, motion_times, offset=None):
+    def index_cpu_tensor(self, tensor_name: str, indices: torch.Tensor) -> torch.Tensor:
+        tensor = getattr(self, tensor_name)
+        return tensor[indices].pin_memory().to(self._device, non_blocking=True)
+    
+    def index_gpu_tensor(self, tensor_name: str, indices: torch.Tensor, stream_idx: int) -> torch.Tensor:
+        tensor = getattr(self, tensor_name)
+
+        with torch.cuda.stream(self.cuda_streams[stream_idx]):
+            if tensor_name == "gts":
+                return tensor[indices, :]
+            else:
+                return tensor[indices]
+
+    def index_and_blend_gpu_tensor(self, tensor_name: str, index0: torch.Tensor, index1: torch.Tensor, blend_exp: torch.Tensor, offset: torch.Tensor = None, stream_idx: int = 0) -> torch.Tensor:
+        tensor = getattr(self, tensor_name)
+        
+        with torch.cuda.stream(self.cuda_streams[stream_idx]):
+            if tensor_name == "gts":
+                tensor0, tensor1 = tensor[index0, :], tensor[index1, :]
+            else:
+                tensor0, tensor1 = tensor[index0], tensor[index1]
+            
+            if offset is None:
+                return (1.0 - blend_exp) * tensor0 + blend_exp * tensor1
+            else:
+                return (1.0 - blend_exp) * tensor0 + blend_exp * tensor1 + offset[..., None, :]  # ZL: apply offset
+
+    def get_motion_state_pcoc(self, motion_ids, motion_times, offset=None):
+        motion_len = self._motion_lengths[motion_ids]
+        num_frames = self._motion_num_frames[motion_ids]
+        dt = self._motion_dt[motion_ids]
+
+        frame_idx0, frame_idx1, blend = self._calc_frame_blend(motion_times, motion_len, num_frames, dt)
+        f0l = frame_idx0 + self.length_starts[motion_ids]
+        f1l = frame_idx1 + self.length_starts[motion_ids]
+        indices = torch.stack([f0l, f1l], dim=0).cpu().contiguous()
+
+        blend = blend.unsqueeze(-1)
+        blend_exp = blend.unsqueeze(-1)
+
+        dof_pos = self.index_and_blend_gpu_tensor("dof_pos", f0l, f1l, blend, None, 0)
+        dof_vel = self.index_and_blend_gpu_tensor("dvs", f0l, f1l, blend, None, 1)
+
+        tensor_names = ["gts_t", "grs_t", "gvs_t", "gavs_t"]
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            indexed_tensors = list(
+                executor.map(
+                    lambda x: self.index_cpu_tensor(x, indices),
+                    tensor_names
+                )
+            )
+
+        rg_pos_t, rg_rot_t, body_vel_t, body_ang_vel_t = indexed_tensors
+
+        rg_pos_t0, rg_pos_t1 = rg_pos_t[0], rg_pos_t[1]
+        rg_rot_t0, rg_rot_t1 = rg_rot_t[0], rg_rot_t[1]
+        body_vel_t0, body_vel_t1 = body_vel_t[0], body_vel_t[1]
+        body_ang_vel_t0, body_ang_vel_t1 = body_ang_vel_t[0], body_ang_vel_t[1]
+
+        if offset is None:
+            rg_pos_t = (1.0 - blend_exp) * rg_pos_t0 + blend_exp * rg_pos_t1  
+        else:
+            rg_pos_t = (1.0 - blend_exp) * rg_pos_t0 + blend_exp * rg_pos_t1 + offset[..., None, :]
+        rg_rot_t = slerp(rg_rot_t0, rg_rot_t1, blend_exp)
+        body_vel_t = (1.0 - blend_exp) * body_vel_t0 + blend_exp * body_vel_t1
+        body_ang_vel_t = (1.0 - blend_exp) * body_ang_vel_t0 + blend_exp * body_ang_vel_t1
+        
+        return_dict = {}
+
+        return_dict.update({
+            "dof_pos": dof_pos.clone(),
+            "dof_vel": dof_vel.view(dof_vel.shape[0], -1),
+            "rg_pos_t": rg_pos_t,
+            "rg_rot_t": rg_rot_t,
+            "body_vel_t": body_vel_t,
+            "body_ang_vel_t": body_ang_vel_t,
+        })
+
+        return return_dict
+    
+    def get_motion_state_rrs(self, motion_ids, motion_times, offset=None):
+        motion_len = self._motion_lengths[motion_ids]
+        num_frames = self._motion_num_frames[motion_ids]
+        dt = self._motion_dt[motion_ids]
+
+        frame_idx0, frame_idx1, blend = self._calc_frame_blend(motion_times, motion_len, num_frames, dt)
+        f0l = frame_idx0 + self.length_starts[motion_ids]
+        f1l = frame_idx1 + self.length_starts[motion_ids]
+        indices = torch.stack([f0l, f1l], dim=0)
+
+        blend = blend.unsqueeze(-1)
+        blend_exp = blend.unsqueeze(-1)
+
+        body_vel = self.index_and_blend_gpu_tensor("gvs", f0l, f1l, blend_exp, None, 2)
+        body_ang_vel = self.index_and_blend_gpu_tensor("gavs", f0l, f1l, blend_exp, None, 3)
+        rg_pos = self.index_and_blend_gpu_tensor("gts", f0l, f1l, blend_exp, offset, 4)
+        rb_rot = self.index_gpu_tensor("grs", indices, 5)
+        
+        rb_rot0, rb_rot1 = rb_rot[0], rb_rot[1]
+        rb_rot = slerp(rb_rot0, rb_rot1, blend_exp)
+        
+        return_dict = {}        
+
+        return_dict.update({
+            "root_pos": rg_pos[..., 0, :].clone(),
+            "root_rot": rb_rot[..., 0, :].clone(),
+            "root_vel": body_vel[..., 0, :].clone(),
+            "root_ang_vel": body_ang_vel[..., 0, :].clone(),
+        })
+
+        return return_dict
+    
+    def get_motion_state_rd(self, motion_ids, motion_times, offset=None):
         motion_len = self._motion_lengths[motion_ids]
         num_frames = self._motion_num_frames[motion_ids]
         dt = self._motion_dt[motion_ids]
@@ -122,24 +281,62 @@ class MotionLibBase():
         f0l = frame_idx0 + self.length_starts[motion_ids]
         f1l = frame_idx1 + self.length_starts[motion_ids]
 
-        if "dof_pos" in self.__dict__:
+        blend = blend.unsqueeze(-1)
+
+        dof_pos = self.index_and_blend_gpu_tensor("dof_pos", f0l, f1l, blend, None, 6)
+        dof_vel = self.index_and_blend_gpu_tensor("dvs", f0l, f1l, blend, None, 7)
+
+        return_dict = {}
+
+        return_dict.update({
+            "dof_pos": dof_pos.clone(),
+            "dof_vel": dof_vel.view(dof_vel.shape[0], -1),
+        })
+
+        return return_dict
+
+    def get_motion_state(self, motion_ids, motion_times, offset=None):
+        motion_len = self._motion_lengths[motion_ids]
+        num_frames = self._motion_num_frames[motion_ids]
+        dt = self._motion_dt[motion_ids]
+
+        frame_idx0, frame_idx1, blend = self._calc_frame_blend(motion_times, motion_len, num_frames, dt)
+        f0l = (frame_idx0 + self.length_starts[motion_ids])
+        f1l = (frame_idx1 + self.length_starts[motion_ids])
+
+        f0l_ = f0l.cpu().contiguous()
+        f1l_ = f1l.cpu().contiguous()
+
+        if self.has_tensor("dof_pos"):
+            self.onload_tensor("dof_pos", self._device)
             local_rot0 = self.dof_pos[f0l]
             local_rot1 = self.dof_pos[f1l]
+            self.free_tensor("dof_pos")
         else:
-            local_rot0 = self.lrs[f0l]
-            local_rot1 = self.lrs[f1l]
-            
-        body_vel0 = self.gvs[f0l]
-        body_vel1 = self.gvs[f1l]
+            self.lrs = self.onload_tensor("lrs", self._device)
+            local_rot0 = self.lrs[f0l_].pin_memory().to(self._device, non_blocking=True)
+            local_rot1 = self.lrs[f1l_].pin_memory().to(self._device, non_blocking=True)
+            self.free_tensor("lrs")
+        
+        self.onload_tensor("gvs", self._device)
+        body_vel0 = self.gvs[f0l_].pin_memory().to(self._device, non_blocking=True)
+        body_vel1 = self.gvs[f1l_].pin_memory().to(self._device, non_blocking=True)
+        self.free_tensor("gvs")
 
-        body_ang_vel0 = self.gavs[f0l]
-        body_ang_vel1 = self.gavs[f1l]
+        self.onload_tensor("gavs", self._device)
+        body_ang_vel0 = self.gavs[f0l_].pin_memory().to(self._device, non_blocking=True)
+        body_ang_vel1 = self.gavs[f1l_].pin_memory().to(self._device, non_blocking=True)
+        self.free_tensor("gavs")
 
+        self.onload_tensor("gts", self._device)
         rg_pos0 = self.gts[f0l, :]
         rg_pos1 = self.gts[f1l, :]
+        self.free_tensor("gts")
 
+        self.onload_tensor("dvs", self._device)
         dof_vel0 = self.dvs[f0l]
         dof_vel1 = self.dvs[f1l]
+        self.free_tensor("dvs")
 
         vals = [local_rot0, local_rot1, body_vel0, body_vel1, body_ang_vel0, body_ang_vel1, rg_pos0, rg_pos1, dof_vel0, dof_vel1]
         for v in vals:
@@ -157,31 +354,43 @@ class MotionLibBase():
         body_vel = (1.0 - blend_exp) * body_vel0 + blend_exp * body_vel1
         body_ang_vel = (1.0 - blend_exp) * body_ang_vel0 + blend_exp * body_ang_vel1
 
-        if "dof_pos" in self.__dict__: # Robot Joints
+        if self.has_tensor("dof_pos"): # Robot Joints
             dof_vel = (1.0 - blend) * dof_vel0 + blend * dof_vel1
             dof_pos = (1.0 - blend) * local_rot0 + blend * local_rot1
         else:
             dof_vel = (1.0 - blend_exp) * dof_vel0 + blend_exp * dof_vel1
             local_rot = slerp(local_rot0, local_rot1, torch.unsqueeze(blend, axis=-1))
             dof_pos = self._local_rotation_to_dof_smpl(local_rot)
-
+        
+        self.onload_tensor("grs", self._device)
         rb_rot0 = self.grs[f0l]
         rb_rot1 = self.grs[f1l]
+        self.free_tensor("grs")
+
         rb_rot = slerp(rb_rot0, rb_rot1, blend_exp)
         return_dict = {}
         
-        if "gts_t" in self.__dict__:
-            rg_pos_t0 = self.gts_t[f0l]
-            rg_pos_t1 = self.gts_t[f1l]
+        if self.has_tensor("gts_t"):
+            self.onload_tensor("gts_t", self._device)
+            rg_pos_t0 = self.gts_t[f0l_].pin_memory().to(self._device, non_blocking=True)
+            rg_pos_t1 = self.gts_t[f1l_].pin_memory().to(self._device, non_blocking=True)
+            self.free_tensor("gts_t")
             
-            rg_rot_t0 = self.grs_t[f0l]
-            rg_rot_t1 = self.grs_t[f1l]
+            self.onload_tensor("grs_t", self._device)
+            rg_rot_t0 = self.grs_t[f0l_].pin_memory().to(self._device, non_blocking=True)
+            rg_rot_t1 = self.grs_t[f1l_].pin_memory().to(self._device, non_blocking=True)
+            self.free_tensor("grs_t")
             
-            body_vel_t0 = self.gvs_t[f0l]
-            body_vel_t1 = self.gvs_t[f1l]
+            self.onload_tensor("gvs_t", self._device)
+            body_vel_t0 = self.gvs_t[f0l_].pin_memory().to(self._device, non_blocking=True)
+            body_vel_t1 = self.gvs_t[f1l_].pin_memory().to(self._device, non_blocking=True)
+            self.free_tensor("gvs_t")
             
-            body_ang_vel_t0 = self.gavs_t[f0l]
-            body_ang_vel_t1 = self.gavs_t[f1l]
+            self.onload_tensor("gavs_t", self._device)
+            body_ang_vel_t0 = self.gavs_t[f0l_].pin_memory().to(self._device, non_blocking=True)
+            body_ang_vel_t1 = self.gavs_t[f1l_].pin_memory().to(self._device, non_blocking=True)
+            self.free_tensor("gavs_t")
+
             if offset is None:
                 rg_pos_t = (1.0 - blend_exp) * rg_pos_t0 + blend_exp * rg_pos_t1  
             else:
@@ -196,10 +405,21 @@ class MotionLibBase():
             body_ang_vel_t = body_ang_vel
         
         if flags.real_traj:
+            self.onload_tensor("q_gavs", self._device)
             q_body_ang_vel0, q_body_ang_vel1 = self.q_gavs[f0l], self.q_gavs[f1l]
+            self.free_tensor("q_gavs")
+
+            self.onload_tensor("q_grs", self._device)
             q_rb_rot0, q_rb_rot1 = self.q_grs[f0l], self.q_grs[f1l]
+            self.free_tensor("q_grs")
+
+            self.onload_tensor("q_gts", self._device)
             q_rg_pos0, q_rg_pos1 = self.q_gts[f0l, :], self.q_gts[f1l, :]
+            self.free_tensor("q_gts")
+
+            self.onload_tensor("q_gvs", self._device)
             q_body_vel0, q_body_vel1 = self.q_gvs[f0l], self.q_gvs[f1l]
+            self.free_tensor("q_gvs")
 
             q_ang_vel = (1.0 - blend_exp) * q_body_ang_vel0 + blend_exp * q_body_ang_vel1
             q_rb_rot = slerp(q_rb_rot0, q_rb_rot1, blend_exp)
@@ -211,6 +431,7 @@ class MotionLibBase():
             body_vel[:, self.track_idx] = q_body_vel
             body_ang_vel[:, self.track_idx] = q_ang_vel
 
+        self.onload_tensor("_motion_aa", self._device)
         return_dict.update({
             "root_pos": rg_pos[..., 0, :].clone(),
             "root_rot": rb_rot[..., 0, :].clone(),
@@ -229,6 +450,8 @@ class MotionLibBase():
             "body_vel_t": body_vel_t,
             "body_ang_vel_t": body_ang_vel_t,
         })
+        self.free_tensor("_motion_aa")
+
         return return_dict
     
     def load_motions(self, 
@@ -236,6 +459,7 @@ class MotionLibBase():
                      start_idx=0, 
                      max_len=-1, 
                      target_heading = None):
+        # import ipdb; ipdb.set_trace()
 
         motions = []
         _motion_lengths = []
@@ -255,9 +479,9 @@ class MotionLibBase():
         num_motion_to_load = self.num_envs
 
         if random_sample:
-            sample_idxes = torch.multinomial(self._sampling_prob, num_samples=num_motion_to_load, replacement=True).to(self._device)
+            sample_idxes = torch.multinomial(self._sampling_prob, num_samples=num_motion_to_load, replacement=True).to(self._device) # (4096,)
         else:
-            sample_idxes = torch.remainder(torch.arange(num_motion_to_load) + start_idx, self._num_unique_motions ).to(self._device)
+            sample_idxes = torch.remainder(torch.arange(num_motion_to_load) + start_idx, self._num_unique_motions ).to(self._device) # (4096,)
 
         self._curr_motion_ids = sample_idxes
         self.curr_motion_keys = self._motion_data_keys[sample_idxes.cpu()]
@@ -266,7 +490,7 @@ class MotionLibBase():
         logger.info(f"Loading {num_motion_to_load} motions...")
         logger.info(f"Sampling motion: {sample_idxes[:5]}, ....")
         logger.info(f"Current motion keys: {self.curr_motion_keys[:5]}, ....")
-        logger.info(f"\n\nHEASDADAD\n\n")
+
         motion_data_list = self._motion_data_list[sample_idxes.cpu().numpy()]
         res_acc = self.load_motion_with_skeleton(motion_data_list, self.fix_height, target_heading, max_len)
         for f in track(range(len(res_acc)), description="Loading motions..."):
@@ -275,6 +499,7 @@ class MotionLibBase():
             curr_dt = 1.0 / motion_fps
             num_frames = curr_motion.global_rotation.shape[0]
             curr_len = 1.0 / motion_fps * (num_frames - 1)
+
             if "beta" in motion_file_data:
                 _motion_aa.append(motion_file_data['pose_aa'].reshape(-1, self.num_joints * 3))
                 _motion_bodies.append(curr_motion.gender_beta)
@@ -295,56 +520,138 @@ class MotionLibBase():
                 self.q_grs.append(curr_motion.quest_motion['quest_rot'])
                 self.q_gavs.append(curr_motion.quest_motion['global_angular_vel'])
                 self.q_gvs.append(curr_motion.quest_motion['linear_vel'])
-                
             del curr_motion
         
-        self._motion_lengths = torch.tensor(_motion_lengths, device=self._device, dtype=torch.float32)
-        self._motion_fps = torch.tensor(_motion_fps, device=self._device, dtype=torch.float32)
-        self._motion_bodies = torch.stack(_motion_bodies).to(self._device).type(torch.float32)
-        self._motion_aa = torch.tensor(np.concatenate(_motion_aa), device=self._device, dtype=torch.float32)
+        self._motion_lengths = torch.tensor(_motion_lengths, device=self._device, dtype=torch.float32).contiguous()       # (4096,)
+        print("self._motion_lengths:", self._motion_lengths.device, "-", self._motion_lengths.shape)
 
-        self._motion_dt = torch.tensor(_motion_dt, device=self._device, dtype=torch.float32)
-        self._motion_num_frames = torch.tensor(_motion_num_frames, device=self._device)
+        self._motion_fps = torch.tensor(_motion_fps, device=self._device, dtype=torch.float32).contiguous()               # (4096,)
+        print("self._motion_fps:", self._motion_fps.device, "-", self._motion_fps.shape)
+
+        self._motion_bodies = torch.stack(_motion_bodies).to(self._device, torch.float32).contiguous()                    # (4096, 17)
+        print("self._motion_bodies:", self._motion_bodies.device, "-", self._motion_bodies.shape)
+
+        self._motion_aa = torch.tensor(np.concatenate(_motion_aa), dtype=torch.float32).contiguous().pin_memory()         # (4743168, 72)
+        print("self._motion_aa:", self._motion_aa.device, "-", self._motion_aa.shape)
+        self.offload_tensor("_motion_aa", "disk")
+        self.free_tensor("_motion_aa")
+
+        self._motion_dt = torch.tensor(_motion_dt, device=self._device, dtype=torch.float32).contiguous()                 # (4096,)
+        print("self._motion_dt:", self._motion_dt.device, "-", self._motion_dt.shape)
+
+        self._motion_num_frames = torch.tensor(_motion_num_frames, device=self._device).contiguous()                      # (4096,)
+        print("self._motion_num_frames:", self._motion_num_frames.device, "-", self._motion_num_frames.shape)
+
         # import ipdb; ipdb.set_trace()
         if self.has_action:
-            self._motion_actions = torch.cat(_motion_actions, dim=0).float().to(self._device)
+            self._motion_actions = torch.cat(_motion_actions, dim=0).to(self._device, torch.float32).contiguous()
+            print("self._motion_actions:", self._motion_actions.device, "-", self._motion_actions.shape)
+            self.offload_tensor("_motion_actions", "disk")
+            self.free_tensor("_motion_actions")
+
         self._num_motions = len(motions)
         
-        self.gts = torch.cat([m.global_translation for m in motions], dim=0).float().to(self._device)
-        self.grs = torch.cat([m.global_rotation for m in motions], dim=0).float().to(self._device)
-        self.lrs = torch.cat([m.local_rotation for m in motions], dim=0).float().to(self._device)
-        self.grvs = torch.cat([m.global_root_velocity for m in motions], dim=0).float().to(self._device)
-        self.gravs = torch.cat([m.global_root_angular_velocity for m in motions], dim=0).float().to(self._device)
-        self.gavs = torch.cat([m.global_angular_velocity for m in motions], dim=0).float().to(self._device)
-        self.gvs = torch.cat([m.global_velocity for m in motions], dim=0).float().to(self._device)
-        self.dvs = torch.cat([m.dof_vels for m in motions], dim=0).float().to(self._device)
+        self.gts = torch.cat([m.global_translation for m in motions], dim=0).to(self._device, torch.float32).contiguous()             # (4743168, 24, 3)
+        _num_frames = self.gts.shape[0]
+        print("self.gts:", self.gts.device, "-", self.gts.shape)
+        self.offload_tensor("gts", "disk")
+        self.free_tensor("gts")
+
+        self.grs = torch.cat([m.global_rotation for m in motions], dim=0).to(self._device, torch.float32).contiguous()                # (4743168, 24, 4)
+        print("self.grs:", self.grs.device, "-", self.grs.shape)
+        self.offload_tensor("grs", "disk")
+        self.free_tensor("grs")
+
+        self.lrs = torch.cat([m.local_rotation for m in motions], dim=0).float().contiguous().pin_memory()                            # (4743168, 27, 4)
+        print("self.lrs:", self.lrs.device, "-", self.lrs.shape)
+        self.offload_tensor("lrs", "disk")
+        self.free_tensor("lrs")
+        
+        self.grvs = torch.cat([m.global_root_velocity for m in motions], dim=0).to(self._device, torch.float32).contiguous()          # (4743168, 3)
+        print("self.grvs:", self.grvs.device, "-", self.grvs.shape)
+        self.offload_tensor("grvs", "disk")
+        self.free_tensor("grvs")
+
+        self.gravs = torch.cat([m.global_root_angular_velocity for m in motions], dim=0).to(self._device, torch.float32).contiguous() # (4743168, 3)
+        print("self.gravs:", self.gravs.device, "-", self.gravs.shape)
+        self.offload_tensor("gravs", "disk")
+        self.free_tensor("gravs")
+        
+        self.gavs = torch.cat([m.global_angular_velocity for m in motions], dim=0).to(self._device, torch.float32).contiguous()       # (4743168, 24, 3)
+        print("self.gavs:", self.gavs.device, "-", self.gavs.shape)
+        self.offload_tensor("gavs", "disk")
+        self.free_tensor("gavs")
+
+        self.gvs = torch.cat([m.global_velocity for m in motions], dim=0).to(self._device, torch.float32).contiguous()                # (4743168, 24, 3)
+        print("self.gvs:", self.gvs.device, "-", self.gvs.shape)
+        self.offload_tensor("gvs", "disk")
+        self.free_tensor("gvs")
+        
+        self.dvs = torch.cat([m.dof_vels for m in motions], dim=0).to(self._device, torch.float32).contiguous()                       # (4743168, 23)
+        print("self.dvs:", self.dvs.device, "-", self.dvs.shape)
+        self.offload_tensor("dvs", "disk")
+        self.free_tensor("dvs")
         
         if "global_translation_extend" in motions[0].__dict__:
-            self.gts_t = torch.cat([m.global_translation_extend for m in motions], dim=0).float().to(self._device)
-            self.grs_t = torch.cat([m.global_rotation_extend for m in motions], dim=0).float().to(self._device)
-            self.gvs_t = torch.cat([m.global_velocity_extend for m in motions], dim=0).float().to(self._device)
-            self.gavs_t = torch.cat([m.global_angular_velocity_extend for m in motions], dim=0).float().to(self._device)
+            self.gts_t = torch.cat([m.global_translation_extend for m in motions], dim=0).float().contiguous().pin_memory()           # (4743168, 27, 3)
+            print("self.gts_t:", self.gts_t.device, "-", self.gts_t.shape)
+            # self.offload_tensor("gts_t", "disk")
+            # self.free_tensor("gts_t")
+
+            self.grs_t = torch.cat([m.global_rotation_extend for m in motions], dim=0).float().contiguous().pin_memory()              # (4743168, 27, 4)
+            print("self.grs_t:", self.grs_t.device, "-", self.grs_t.shape)
+            # self.offload_tensor("grs_t", "disk")
+            # self.free_tensor("grs_t")
+
+            self.gvs_t = torch.cat([m.global_velocity_extend for m in motions], dim=0).float().contiguous().pin_memory()              # (4743168, 27, 3)
+            print("self.gvs_t:", self.gvs_t.device, "-", self.gvs_t.shape)
+            # self.offload_tensor("gvs_t", "disk")
+            # self.free_tensor("gvs_t")
+
+            self.gavs_t = torch.cat([m.global_angular_velocity_extend for m in motions], dim=0).float().contiguous().pin_memory()     # (4743168, 27, 3)
+            print("self.gavs_t:", self.gavs_t.device, "-", self.gavs_t.shape)
+            # self.offload_tensor("gavs_t", "disk")
+            # self.free_tensor("gavs_t")
         
         if "dof_pos" in motions[0].__dict__:
-            self.dof_pos = torch.cat([m.dof_pos for m in motions], dim=0).float().to(self._device)
+            self.dof_pos = torch.cat([m.dof_pos for m in motions], dim=0).to(self._device, torch.float32).contiguous() # (4743168, 23)
+            print("self.dof_pos:", self.dof_pos.device, "-", self.dof_pos.shape)
+            # self.offload_tensor("dof_pos", "disk")
+            # self.free_tensor("dof_pos")
+
         # import ipdb; ipdb.set_trace()
         if flags.real_traj:
-            self.q_gts = torch.cat(self.q_gts, dim=0).float().to(self._device)
-            self.q_grs = torch.cat(self.q_grs, dim=0).float().to(self._device)
-            self.q_gavs = torch.cat(self.q_gavs, dim=0).float().to(self._device)
-            self.q_gvs = torch.cat(self.q_gvs, dim=0).float().to(self._device)
+            self.q_gts = torch.cat(self.q_gts, dim=0).to(self._device, torch.float32).contiguous()
+            print("self.q_gts:", self.q_gts.device, "-", self.q_gts.shape)
+            self.offload_tensor("q_gts", "disk")
+            self.free_tensor("q_gts")
+
+            self.q_grs = torch.cat(self.q_grs, dim=0).to(self._device, torch.float32).contiguous()
+            print("self.q_grs:", self.q_grs.device, "-", self.q_grs.shape)
+            self.offload_tensor("q_grs", "disk")
+            self.free_tensor("q_grs")
+            
+            self.q_gavs = torch.cat(self.q_gavs, dim=0).to(self._device, torch.float32).contiguous()
+            print("self.q_gavs:", self.q_gavs.device, "-", self.q_gavs.shape)
+            self.offload_tensor("q_gavs", "disk")
+            self.free_tensor("q_gavs")
+            
+            self.q_gvs = torch.cat(self.q_gvs, dim=0).to(self._device, torch.float32).contiguous()
+            print("self.q_gvs:", self.q_gvs.device, "-", self.q_gvs.shape)
+            self.offload_tensor("q_gvs", "disk")
+            self.free_tensor("q_gvs")
         
-        lengths = self._motion_num_frames
-        lengths_shifted = lengths.roll(1)
+        lengths = self._motion_num_frames # (4096,)
+        lengths_shifted = lengths.roll(1) # (4096,)
         lengths_shifted[0] = 0
-        self.length_starts = lengths_shifted.cumsum(0)
-        self.motion_ids = torch.arange(len(motions), dtype=torch.long, device=self._device)
-        motion = motions[0]
+        self.length_starts = lengths_shifted.cumsum(0) #(4096,)
+        self.motion_ids = torch.arange(len(motions), dtype=torch.long, device=self._device).contiguous() # (4096,)
+        # motion = motions[0]
         self.num_bodies = self.num_joints
         
         num_motions = self.num_motions()
         total_len = self.get_total_length()
-        logger.info(f"Loaded {num_motions:d} motions with a total length of {total_len:.3f}s and {self.gts.shape[0]} frames.")
+        logger.info(f"Loaded {num_motions:d} motions with a total length of {total_len:.3f}s and {_num_frames} frames.")
         return motions
 
     def fix_trans_height(self, pose_aa, trans, fix_height_mode):
@@ -369,6 +676,7 @@ class MotionLibBase():
             if not isinstance(curr_file, dict) and osp.isfile(curr_file):
                 key = motion_data_list[f].split("/")[-1].split(".")[0]
                 curr_file = joblib.load(curr_file)[key]
+
             seq_len = curr_file['root_trans_offset'].shape[0]
             if max_len == -1 or seq_len < max_len:
                 start, end = 0, seq_len
@@ -436,7 +744,6 @@ class MotionLibBase():
             return self._motion_lengths
         else:
             return self._motion_lengths[motion_ids]
-        
 
 
     def _calc_frame_blend(self, time, len, num_frames, dt):
