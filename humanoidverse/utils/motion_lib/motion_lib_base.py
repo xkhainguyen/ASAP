@@ -198,11 +198,10 @@ class MotionLibBase():
 
         blend = blend.unsqueeze(-1)
         blend_exp = blend.unsqueeze(-1)
-
+        torch.cuda.synchronize(self._device)
         dof_pos = self.index_and_blend_gpu_tensor("dof_pos", f0l, f1l, blend, None, 0)
         dof_vel = self.index_and_blend_gpu_tensor("dvs", f0l, f1l, blend, None, 1)
 
-        torch.cuda.synchronize(self._device)
         tensor_names = ["gts_t", "grs_t", "gvs_t", "gavs_t"]
 
         with ThreadPoolExecutor(max_workers=4) as executor:
@@ -212,7 +211,7 @@ class MotionLibBase():
                     tensor_names
                 )
             )
-
+        torch.cuda.synchronize(self._device)
         rg_pos_t, rg_rot_t, body_vel_t, body_ang_vel_t = indexed_tensors
 
         rg_pos_t0, rg_pos_t1 = rg_pos_t[0], rg_pos_t[1]
@@ -254,6 +253,7 @@ class MotionLibBase():
         blend = blend.unsqueeze(-1)
         blend_exp = blend.unsqueeze(-1)
 
+        torch.cuda.synchronize(self._device)
         body_vel = self.index_and_blend_gpu_tensor("gvs", f0l, f1l, blend_exp, None, 2)
         body_ang_vel = self.index_and_blend_gpu_tensor("gavs", f0l, f1l, blend_exp, None, 3)
         rg_pos = self.index_and_blend_gpu_tensor("gts", f0l, f1l, blend_exp, offset, 4)
@@ -283,7 +283,7 @@ class MotionLibBase():
         f1l = frame_idx1 + self.length_starts[motion_ids]
 
         blend = blend.unsqueeze(-1)
-
+        torch.cuda.synchronize(self._device)
         dof_pos = self.index_and_blend_gpu_tensor("dof_pos", f0l, f1l, blend, None, 6)
         dof_vel = self.index_and_blend_gpu_tensor("dvs", f0l, f1l, blend, None, 7)
         torch.cuda.synchronize(self._device)
