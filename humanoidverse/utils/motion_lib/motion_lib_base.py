@@ -202,6 +202,7 @@ class MotionLibBase():
         dof_pos = self.index_and_blend_gpu_tensor("dof_pos", f0l, f1l, blend, None, 0)
         dof_vel = self.index_and_blend_gpu_tensor("dvs", f0l, f1l, blend, None, 1)
 
+        torch.cuda.synchronize(self._device)
         tensor_names = ["gts_t", "grs_t", "gvs_t", "gavs_t"]
 
         with ThreadPoolExecutor(max_workers=4) as executor:
@@ -257,7 +258,7 @@ class MotionLibBase():
         body_ang_vel = self.index_and_blend_gpu_tensor("gavs", f0l, f1l, blend_exp, None, 3)
         rg_pos = self.index_and_blend_gpu_tensor("gts", f0l, f1l, blend_exp, offset, 4)
         rb_rot = self.index_gpu_tensor("grs", indices, 5)
-        
+        torch.cuda.synchronize(self._device)
         rb_rot0, rb_rot1 = rb_rot[0], rb_rot[1]
         rb_rot = slerp(rb_rot0, rb_rot1, blend_exp)
         
@@ -285,6 +286,7 @@ class MotionLibBase():
 
         dof_pos = self.index_and_blend_gpu_tensor("dof_pos", f0l, f1l, blend, None, 6)
         dof_vel = self.index_and_blend_gpu_tensor("dvs", f0l, f1l, blend, None, 7)
+        torch.cuda.synchronize(self._device)
 
         return_dict = {}
 
@@ -328,7 +330,7 @@ class MotionLibBase():
         body_ang_vel1 = self.gavs[f1l_].pin_memory().to(self._device, non_blocking=True)
         self.free_tensor("gavs")
 
-        self.onload_tensor("gts", self._device)
+        self.onload_tensor("gts", self._device)         
         rg_pos0 = self.gts[f0l, :]
         rg_pos1 = self.gts[f1l, :]
         self.free_tensor("gts")
@@ -523,29 +525,29 @@ class MotionLibBase():
             del curr_motion
         
         self._motion_lengths = torch.tensor(_motion_lengths, device=self._device, dtype=torch.float32).contiguous()       # (4096,)
-        print("self._motion_lengths:", self._motion_lengths.device, "-", self._motion_lengths.shape)
+        logger.info("self._motion_lengths:", self._motion_lengths.device, "-", self._motion_lengths.shape)
 
         self._motion_fps = torch.tensor(_motion_fps, device=self._device, dtype=torch.float32).contiguous()               # (4096,)
-        print("self._motion_fps:", self._motion_fps.device, "-", self._motion_fps.shape)
+        logger.info("self._motion_fps:", self._motion_fps.device, "-", self._motion_fps.shape)
 
         self._motion_bodies = torch.stack(_motion_bodies).to(self._device, torch.float32).contiguous()                    # (4096, 17)
-        print("self._motion_bodies:", self._motion_bodies.device, "-", self._motion_bodies.shape)
+        logger.info("self._motion_bodies:", self._motion_bodies.device, "-", self._motion_bodies.shape)
 
         self._motion_aa = torch.tensor(np.concatenate(_motion_aa), dtype=torch.float32).contiguous().pin_memory()         # (4743168, 72)
-        print("self._motion_aa:", self._motion_aa.device, "-", self._motion_aa.shape)
+        logger.info("self._motion_aa:", self._motion_aa.device, "-", self._motion_aa.shape)
         self.offload_tensor("_motion_aa", "disk")
         self.free_tensor("_motion_aa")
 
         self._motion_dt = torch.tensor(_motion_dt, device=self._device, dtype=torch.float32).contiguous()                 # (4096,)
-        print("self._motion_dt:", self._motion_dt.device, "-", self._motion_dt.shape)
+        logger.info("self._motion_dt:", self._motion_dt.device, "-", self._motion_dt.shape)
 
         self._motion_num_frames = torch.tensor(_motion_num_frames, device=self._device).contiguous()                      # (4096,)
-        print("self._motion_num_frames:", self._motion_num_frames.device, "-", self._motion_num_frames.shape)
+        logger.info("self._motion_num_frames:", self._motion_num_frames.device, "-", self._motion_num_frames.shape)
 
         # import ipdb; ipdb.set_trace()
         if self.has_action:
             self._motion_actions = torch.cat(_motion_actions, dim=0).to(self._device, torch.float32).contiguous()
-            print("self._motion_actions:", self._motion_actions.device, "-", self._motion_actions.shape)
+            logger.info("self._motion_actions:", self._motion_actions.device, "-", self._motion_actions.shape)
             self.offload_tensor("_motion_actions", "disk")
             self.free_tensor("_motion_actions")
 
@@ -553,91 +555,91 @@ class MotionLibBase():
         
         self.gts = torch.cat([m.global_translation for m in motions], dim=0).to(self._device, torch.float32).contiguous()             # (4743168, 24, 3)
         _num_frames = self.gts.shape[0]
-        print("self.gts:", self.gts.device, "-", self.gts.shape)
+        logger.info("self.gts:", self.gts.device, "-", self.gts.shape)
         self.offload_tensor("gts", "disk")
         self.free_tensor("gts")
 
         self.grs = torch.cat([m.global_rotation for m in motions], dim=0).to(self._device, torch.float32).contiguous()                # (4743168, 24, 4)
-        print("self.grs:", self.grs.device, "-", self.grs.shape)
+        logger.info("self.grs:", self.grs.device, "-", self.grs.shape)
         self.offload_tensor("grs", "disk")
         self.free_tensor("grs")
 
         self.lrs = torch.cat([m.local_rotation for m in motions], dim=0).float().contiguous().pin_memory()                            # (4743168, 27, 4)
-        print("self.lrs:", self.lrs.device, "-", self.lrs.shape)
+        logger.info("self.lrs:", self.lrs.device, "-", self.lrs.shape)
         self.offload_tensor("lrs", "disk")
         self.free_tensor("lrs")
         
         self.grvs = torch.cat([m.global_root_velocity for m in motions], dim=0).to(self._device, torch.float32).contiguous()          # (4743168, 3)
-        print("self.grvs:", self.grvs.device, "-", self.grvs.shape)
+        logger.info("self.grvs:", self.grvs.device, "-", self.grvs.shape)
         self.offload_tensor("grvs", "disk")
         self.free_tensor("grvs")
 
         self.gravs = torch.cat([m.global_root_angular_velocity for m in motions], dim=0).to(self._device, torch.float32).contiguous() # (4743168, 3)
-        print("self.gravs:", self.gravs.device, "-", self.gravs.shape)
+        logger.info("self.gravs:", self.gravs.device, "-", self.gravs.shape)
         self.offload_tensor("gravs", "disk")
         self.free_tensor("gravs")
         
         self.gavs = torch.cat([m.global_angular_velocity for m in motions], dim=0).to(self._device, torch.float32).contiguous()       # (4743168, 24, 3)
-        print("self.gavs:", self.gavs.device, "-", self.gavs.shape)
+        logger.info("self.gavs:", self.gavs.device, "-", self.gavs.shape)
         self.offload_tensor("gavs", "disk")
         self.free_tensor("gavs")
 
         self.gvs = torch.cat([m.global_velocity for m in motions], dim=0).to(self._device, torch.float32).contiguous()                # (4743168, 24, 3)
-        print("self.gvs:", self.gvs.device, "-", self.gvs.shape)
+        logger.info("self.gvs:", self.gvs.device, "-", self.gvs.shape)
         self.offload_tensor("gvs", "disk")
         self.free_tensor("gvs")
         
         self.dvs = torch.cat([m.dof_vels for m in motions], dim=0).to(self._device, torch.float32).contiguous()                       # (4743168, 23)
-        print("self.dvs:", self.dvs.device, "-", self.dvs.shape)
+        logger.info("self.dvs:", self.dvs.device, "-", self.dvs.shape)
         self.offload_tensor("dvs", "disk")
         self.free_tensor("dvs")
         
         if "global_translation_extend" in motions[0].__dict__:
             self.gts_t = torch.cat([m.global_translation_extend for m in motions], dim=0).float().contiguous().pin_memory()           # (4743168, 27, 3)
-            print("self.gts_t:", self.gts_t.device, "-", self.gts_t.shape)
+            logger.info("self.gts_t:", self.gts_t.device, "-", self.gts_t.shape)
             # self.offload_tensor("gts_t", "disk")
             # self.free_tensor("gts_t")
 
             self.grs_t = torch.cat([m.global_rotation_extend for m in motions], dim=0).float().contiguous().pin_memory()              # (4743168, 27, 4)
-            print("self.grs_t:", self.grs_t.device, "-", self.grs_t.shape)
+            logger.info("self.grs_t:", self.grs_t.device, "-", self.grs_t.shape)
             # self.offload_tensor("grs_t", "disk")
             # self.free_tensor("grs_t")
 
             self.gvs_t = torch.cat([m.global_velocity_extend for m in motions], dim=0).float().contiguous().pin_memory()              # (4743168, 27, 3)
-            print("self.gvs_t:", self.gvs_t.device, "-", self.gvs_t.shape)
+            logger.info("self.gvs_t:", self.gvs_t.device, "-", self.gvs_t.shape)
             # self.offload_tensor("gvs_t", "disk")
             # self.free_tensor("gvs_t")
 
             self.gavs_t = torch.cat([m.global_angular_velocity_extend for m in motions], dim=0).float().contiguous().pin_memory()     # (4743168, 27, 3)
-            print("self.gavs_t:", self.gavs_t.device, "-", self.gavs_t.shape)
+            logger.info("self.gavs_t:", self.gavs_t.device, "-", self.gavs_t.shape)
             # self.offload_tensor("gavs_t", "disk")
             # self.free_tensor("gavs_t")
         
         if "dof_pos" in motions[0].__dict__:
             self.dof_pos = torch.cat([m.dof_pos for m in motions], dim=0).to(self._device, torch.float32).contiguous() # (4743168, 23)
-            print("self.dof_pos:", self.dof_pos.device, "-", self.dof_pos.shape)
+            logger.info("self.dof_pos:", self.dof_pos.device, "-", self.dof_pos.shape)
             # self.offload_tensor("dof_pos", "disk")
             # self.free_tensor("dof_pos")
 
         # import ipdb; ipdb.set_trace()
         if flags.real_traj:
             self.q_gts = torch.cat(self.q_gts, dim=0).to(self._device, torch.float32).contiguous()
-            print("self.q_gts:", self.q_gts.device, "-", self.q_gts.shape)
+            logger.info("self.q_gts:", self.q_gts.device, "-", self.q_gts.shape)
             self.offload_tensor("q_gts", "disk")
             self.free_tensor("q_gts")
 
             self.q_grs = torch.cat(self.q_grs, dim=0).to(self._device, torch.float32).contiguous()
-            print("self.q_grs:", self.q_grs.device, "-", self.q_grs.shape)
+            logger.info("self.q_grs:", self.q_grs.device, "-", self.q_grs.shape)
             self.offload_tensor("q_grs", "disk")
             self.free_tensor("q_grs")
             
             self.q_gavs = torch.cat(self.q_gavs, dim=0).to(self._device, torch.float32).contiguous()
-            print("self.q_gavs:", self.q_gavs.device, "-", self.q_gavs.shape)
+            logger.info("self.q_gavs:", self.q_gavs.device, "-", self.q_gavs.shape)
             self.offload_tensor("q_gavs", "disk")
             self.free_tensor("q_gavs")
             
             self.q_gvs = torch.cat(self.q_gvs, dim=0).to(self._device, torch.float32).contiguous()
-            print("self.q_gvs:", self.q_gvs.device, "-", self.q_gvs.shape)
+            logger.info("self.q_gvs:", self.q_gvs.device, "-", self.q_gvs.shape)
             self.offload_tensor("q_gvs", "disk")
             self.free_tensor("q_gvs")
         
