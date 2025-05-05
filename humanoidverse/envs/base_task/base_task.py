@@ -17,12 +17,12 @@ from termcolor import colored
 
 # Base class for RL tasks
 class BaseTask():
-    def __init__(self, config, device):
+    def __init__(self, config, device, is_training = True):
         self.config = config
         # optimization flags for pytorch JIT
         torch._C._jit_set_profiling_mode(False)
         torch._C._jit_set_profiling_executor(False)
-
+        self.is_training = is_training
         # self.simulator = instantiate(config=self.config.simulator, device=device)
         SimulatorClass = get_class(self.config.simulator._target_)
         self.simulator: BaseSimulator = SimulatorClass(config=self.config, device=device)

@@ -13,10 +13,11 @@ from hydra.utils import instantiate
 from humanoidverse.envs.base_task.base_task import BaseTask
 
 class BaseAlgo:
-    def __init__(self, env: BaseTask, config, device):
+    def __init__(self, env: BaseTask, config, device, is_training = True):
         self.env = env
         self.config = config
         self.device = device
+        self.is_training = is_training
 
     def setup(self):
         return NotImplementedError

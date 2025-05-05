@@ -26,11 +26,11 @@ from scipy.spatial.transform import Rotation as sRot
 import joblib
 
 class LeggedRobotMotionTracking(LeggedRobotBase):
-    def __init__(self, config, device):
+    def __init__(self, config, device, is_training = True):
         self.init_done = False
         self.debug_viz = True
         
-        super().__init__(config, device)
+        super().__init__(config, device, is_training)
         self._init_motion_lib()
         self._init_motion_extend()
         self._init_tracking_config()
@@ -86,7 +86,7 @@ class LeggedRobotMotionTracking(LeggedRobotBase):
 
     def _init_motion_lib(self):
         self.config.robot.motion.step_dt = self.dt
-        self._motion_lib = MotionLibRobot(self.config.robot.motion, num_envs=self.num_envs, device=self.device)
+        self._motion_lib = MotionLibRobot(self.config.robot.motion, num_envs=self.num_envs, device=self.device, is_training = self.is_training)
         if self.is_evaluating:
             self._motion_lib.load_motions(random_sample=False)
         else:

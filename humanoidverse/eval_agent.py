@@ -17,7 +17,7 @@ from humanoidverse.utils.config_utils import *  # noqa: E402, F403
 from loguru import logger
 
 import threading
-# from pynput import keyboard
+from pynput import keyboard
 
 def on_press(key, env):
     try:
@@ -150,7 +150,7 @@ def main(override_config: OmegaConf):
 
     config.domain_rand.push_robots = False
 
-    env = instantiate(config.env, device=device)
+    env = instantiate(config.env, device=device, is_training=False)
 
     # Start a thread to listen for key press
     key_listener_thread = threading.Thread(target=listen_for_keypress, args=(env,))
