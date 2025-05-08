@@ -8,6 +8,7 @@ import onnxruntime as rt
 from collections import deque
 from scipy.spatial.transform import Rotation as R
 
+
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelFactoryInitialize
 from unitree_sdk2py.core.channel import ChannelSubscriber, ChannelFactoryInitialize
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_, unitree_hg_msg_dds__LowState_
@@ -20,9 +21,10 @@ from common.rotation_helper import get_gravity_orientation, transform_imu_data
 from common.remote_controller import RemoteController, KeyMap, KeyListener
 from common.signal_processing import high_pass_filter, low_pass_filter, rk4_integrate
 from common.safety_layer import SafetyLayer
-
+from common.visualize import plot, plot_offline
 np.set_printoptions(precision=4, suppress=True)
-
+# DATA1 = []
+# DATA2 = []
 SINGLE_FRAME = False
 LINER_VELOCITY = False
 
@@ -30,6 +32,7 @@ position_limit = {
     "left_hip_pitch_joint": [-2.5307, 2.8798],
     "left_hip_roll_joint": [-0.5236, 2.9671],
     "left_hip_yaw_joint": [-2,7576, 2.7576],
+
     "left_knee_joint": [-0.087267, 2.8798],
     "left_ankle_pitch_joint": [-0.87267, 0.5236],
     "left_ankle_roll_joint": [-0.2618, 0.2618],
@@ -37,6 +40,7 @@ position_limit = {
     "right_hip_pitch_joint": [-2.5307, 2.8798],
     "right_hip_roll_joint": [-2.9671, 0.5236],
     "right_hip_yaw_joint": [-2.7576, 2.7576],
+
     "right_knee_joint": [-0.087267, 2.8798],
     "right_ankle_pitch_joint": [-0.87267, 0.5236],
     "right_ankle_roll_joint": [-0.2618, 0.2618],
@@ -77,7 +81,7 @@ class StandConfig:
         self.imu_type = "pelvis"
         self.lowcmd_topic = "rt/lowcmd"
         self.lowstate_topic = "rt/lowstate"
-        self.policy_path = "/home/cookie/VR/ASAP/deploy/pretrain/g1/stand_still.pt"
+        self.policy_path = "/home/trinh/Documents/VR/ASAP/ASAP/deploy/pretrain/stand_still.pt"
         self.leg_joint2motor_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         self.kps = [100, 100, 100, 200, 40, 20, 100, 100, 100, 200, 40, 20]
         self.kds = [2.5, 2.5, 2.5, 5.0, 0.2, 0.2, 2.5, 2.5, 2.5, 5.0, 0.2, 0.2]
@@ -295,7 +299,7 @@ class StandController:
 
         # transform action to target_dof_pos
         target_dof_pos = self.config.default_angles + self.action * self.config.action_scale
-
+        
         # Build low cmd
         for i in range(len(self.config.leg_joint2motor_idx)):
             motor_idx = self.config.leg_joint2motor_idx[i]
@@ -313,7 +317,7 @@ class StandController:
             self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i]
             self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i]
             self.low_cmd.motor_cmd[motor_idx].tau = 0
-
+        
         self.safety_layer.run(self.low_state, self.low_cmd)
         self.send_cmd(self.low_cmd)
         time.sleep(self.config.control_dt) # run every control_dt seconds
@@ -363,7 +367,7 @@ class ASAPConfig:
         # self.policy_path = "logs/MotionTracking/20250418_134949-khuyen_lai-motion_tracking-g1_29dof_anneal_23dof/exported/model_36600.onnx"
         # self.policy_path = "logs/MotionTracking/20250421_102644-hieu-motion_tracking-g1_29dof_anneal_23dof/exported/model_124700.onnx"
         # self.policy_path = "/home/rtx3/khai/ASAP/logs/MotionTracking/20250424_230817-dance1-motion_tracking-g1_29dof_anneal_23dof_vr/exported/model_27900.onnx"
-        self.policy_path = "logs/MotionTracking/20250426_113705-sport-motion_tracking-g1_29dof_anneal_23dof_vr/exported/model_133400.onnx"
+        self.policy_path = "/home/trinh/Documents/VR/ASAP/ASAP/logs/sport/model_126100.onnx"
 
         self.leg_joint2motor_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         self.kps = [100, 100, 100, 200, 40, 20, 100, 100, 100, 200, 45, 20]
@@ -395,6 +399,10 @@ class ASAPConfig:
         self.dof_vel_scale = 0.05
         self.action_scale = 0.25
         self.num_actions = 23
+        self.taus = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.arm_waist_taus = [0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 class ASAPController:
     def __init__(self) -> None:
@@ -476,13 +484,11 @@ class ASAPController:
     def run(self):
         # OBSERVATION
         self.counter += 1
-        # Get the current joint position and velocity
         for i in range(len(self.config.action_joint2motor_idx)):
             self.qj[i] = self.low_state.motor_state[self.config.action_joint2motor_idx[i]].q
             self.dqj[i] = self.low_state.motor_state[self.config.action_joint2motor_idx[i]].dq
             self.tauj[i] = self.low_state.motor_state[self.config.action_joint2motor_idx[i]].tau_est
 
-        # imu_state quaternion: w, x, y, z
         quat = self.low_state.imu_state.quaternion
         rotation_quaternion = R.from_euler('y', 0.0).as_quat()  # ('x', angle) creates a rotation quaternion
         rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
@@ -561,16 +567,13 @@ class ASAPController:
         onnx_pred = self.policy.run(None, {self.input_name: [obs_buf]})[0][0]
         self.action = onnx_pred
         # self.action = self.filter_action(self.action, cutoff=5.0)
-        
         # transform action to target_dof_pos
         all_dof_actions = np.zeros(29) # hardware order
         all_dof_actions[self.config.action_joint2motor_idx] = self.config.default_angles23 + self.action * self.config.action_scale
-
         all_dof_actions = np.clip(all_dof_actions.copy(), dof_lower_limit*0.98,  dof_upper_limit*0.98)
-
         self.target_leg_pos = all_dof_actions[self.config.leg_joint2motor_idx]
+        # DATA1.append(self.target_leg_pos[0])
         self.target_upper_pos = all_dof_actions[self.config.arm_waist_joint2motor_idx]
-
         # Build low cmd
         for i in range(len(self.config.leg_joint2motor_idx)):
             motor_idx = self.config.leg_joint2motor_idx[i]
@@ -579,16 +582,7 @@ class ASAPController:
             self.low_cmd.motor_cmd[motor_idx].qd = 0
             self.low_cmd.motor_cmd[motor_idx].kp = self.config.kps[i] * 1.05
             self.low_cmd.motor_cmd[motor_idx].kd = self.config.kds[i] * 1.05
-            self.low_cmd.motor_cmd[motor_idx].tau = 0
-
-        # waist roll
-        # waist yaw 
-        # print(self.target_upper_pos[4], self.target_upper_pos[11])
-        # if self.target_upper_pos[4] < 0.1:
-        #     self.target_upper_pos[4] = 0.1
-        # if self.target_upper_pos[11] > -0.1:
-        #     self.target_upper_pos[11] = -0.1 
-        # print(self.target_upper_pos[4], self.target_upper_pos[11])
+            self.low_cmd.motor_cmd[motor_idx].tau = self.config.taus[i]
 
         for i in range(len(self.config.arm_waist_joint2motor_idx)):
             motor_idx = self.config.arm_waist_joint2motor_idx[i]
@@ -597,11 +591,11 @@ class ASAPController:
             self.low_cmd.motor_cmd[motor_idx].qd = 0
             self.low_cmd.motor_cmd[motor_idx].kp = self.config.arm_waist_kps[i] * 1.05
             self.low_cmd.motor_cmd[motor_idx].kd = self.config.arm_waist_kds[i] * 1.05
-            self.low_cmd.motor_cmd[motor_idx].tau = 0
-    
+            self.low_cmd.motor_cmd[motor_idx].tau = self.config.arm_waist_taus[i]
+        
         self.safety_layer.run(self.low_state, self.low_cmd)
-        self.send_cmd(self.low_cmd)
-
+        self.send_cmd(self.low_cmd)  
+        # DATA2.append(self.low_cmd.motor_cmd[0].q)
         # update history, push the latest to the front, drop the oldest from the end
         self.ang_vel_buf = np.concatenate((ang_vel, self.ang_vel_buf[:-3]), axis=-1, dtype=np.float32)
         self.lin_vel_buf = np.concatenate((lin_vel, self.lin_vel_buf[:-3]), axis=-1, dtype=np.float32)
@@ -613,13 +607,6 @@ class ASAPController:
         
         time.sleep(self.config.control_dt * 0.9) # run every control_dt seconds
 
-        # """Callback function to handle incoming messages."""
-        # current_time = time.time()
-        # read_dt = current_time - self.last_time
-        # self.last_time = current_time
-
-        # if read_dt > 0:
-        #     print(f"Published message at {1/read_dt:.2f} Hz")  # Print the actual receiving fr
 
     def clear_phase(self):
         self.ref_motion_phase = 0.0
@@ -638,9 +625,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("net", type=str, help="network interface")
-    # parser.add_argument("config", type=str, help="config file name in the configs folder", default="g1.yaml")
     args = parser.parse_args()
-
+    data1=[]
+    data2=[]
     # Load config
 
     real_deploy = False if args.net == "lo" else True
@@ -654,10 +641,10 @@ if __name__ == "__main__":
     asap_controller = ASAPController()
     standing_controller = StandController()
 
+
     if real_deploy:
         # Enter the zero torque state, press the start key to continue executing
         standing_controller.zero_torque_state()
-
         # Gradually move to the default state
         standing_controller.start_default_state()
 
@@ -667,7 +654,8 @@ if __name__ == "__main__":
     while True:
         try:
             if enable_asap:
-                asap_controller.run()
+                asap_controller.run()    
+
             else:
                 standing_controller.run()
             # Press the select key to exit
@@ -679,8 +667,20 @@ if __name__ == "__main__":
                 enable_asap = 0
         except KeyboardInterrupt:
             break
+  
+    # # plot
+    # print(len(DATA1), len(DATA2))
+    # import matplotlib.pyplot as plt
 
-    # Enter the damping state
-    create_damping_cmd(standing_controller.low_cmd)
-    standing_controller.send_cmd(standing_controller.low_cmd)
-    print("Exit")
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(DATA1, label='Target Position', color='blue')
+    # plt.plot(DATA2, label='Command Position', color='red')
+    # plt.xlabel('Time Step')
+    # plt.ylabel('Joint Position (rad)')
+    # plt.title('Target vs Command Position for First Joint')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.tight_layout()
+    # plt.savefig('joint_position_comparison.png')  # Save the figure
+    # plt.show() 
+
