@@ -21,7 +21,7 @@ from common.rotation_helper import get_gravity_orientation, transform_imu_data
 from common.remote_controller import RemoteController, KeyMap, KeyListener
 from common.signal_processing import high_pass_filter, low_pass_filter, rk4_integrate
 from common.safety_layer import SafetyLayer
-from common.visualize import plot, plot_offline
+# from common.visualize import plot, plot_offline
 np.set_printoptions(precision=4, suppress=True)
 # DATA1 = []
 # DATA2 = []
