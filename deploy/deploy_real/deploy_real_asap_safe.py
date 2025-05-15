@@ -366,7 +366,7 @@ class ASAPConfig:
         # self.policy_path = "logs/MotionTracking/20250418_134949-khuyen_lai-motion_tracking-g1_29dof_anneal_23dof/exported/model_36600.onnx"
         # self.policy_path = "logs/MotionTracking/20250421_102644-hieu-motion_tracking-g1_29dof_anneal_23dof/exported/model_124700.onnx"
         # self.policy_path = "/home/rtx3/khai/ASAP/logs/MotionTracking/20250424_230817-dance1-motion_tracking-g1_29dof_anneal_23dof_vr/exported/model_27900.onnx"
-        self.policy_path = "logs/MotionTracking/20250425_145000-dance2-motion_tracking-g1_29dof_anneal_23dof_vr/exported/model_133400.onnx"
+        self.policy_path = "logs/MotionTracking/20250509_210330-sport38-motion_tracking-g1_29dof_anneal_23dof_vr/model_113000.pt"
 
         self.leg_joint2motor_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         self.kps = [100, 100, 100, 200, 40, 20, 100, 100, 100, 200, 45, 20]
@@ -526,9 +526,10 @@ class ASAPController:
             motion_length = 21.967
         if "dance2" in self.config.policy_path:
             motion_length = 17.33
+        if "sport38" in self.config.policy_path:
+            motion_length = 38.567
 
         if (self.ref_motion_phase < 1.0): # always in [0, 1]
-            # ref_motion_phase += 0.0315  #TODO: compute the phase based on motion length and episode length
             self.ref_motion_phase += 1.0 * self.config.control_dt / motion_length
         else:
             self.ref_motion_phase = 1.0

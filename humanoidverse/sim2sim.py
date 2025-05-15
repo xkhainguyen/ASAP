@@ -44,11 +44,11 @@ if __name__ == "__main__":
 
     # motion 3
     # policy_path = "logs/MotionTracking/20250415_120557-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_10000.onnx"
-    policy_path = "logs/MotionTracking/20250416_090608-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_41200.onnx"
+    policy_path = "logs/MotionTracking/20250509_210330-sport38-motion_tracking-g1_29dof_anneal_23dof_vr/model_113000.pt"
 
     # motion_length = 3.933 # seconds from loginfo
     # motion_length = 3.967
-    motion_length = 4.0
+    motion_length = 38.567
     xml_path = "humanoidverse/data/robots/g1/g1_29dof_anneal_23dof.xml"
     print("policy_path: ", policy_path)
     print("xml_path   : ", xml_path)
@@ -177,8 +177,7 @@ if __name__ == "__main__":
                 base_lin_vel = lin_vel * 2.0
                 
                 if (ref_motion_phase < 1.0): # always in [0, 1]
-                    # ref_motion_phase += 0.0315  #TODO: compute the phase based on motion length and episode length
-                    ref_motion_phase += 2.0 * control_dt / motion_length
+                    ref_motion_phase += 1.0 * control_dt / motion_length
                 else:
                     ref_motion_phase = 1.0
                 
