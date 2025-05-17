@@ -358,15 +358,17 @@ class ASAPConfig:
         self.lowcmd_topic = "rt/lowcmd"
         self.lowstate_topic = "rt/lowstate"
 
-        # self.policy_path = "logs/MotionTracking/20250416_090608-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_41200.onnx"
+        # self.policy_path = "logs/MotionTracking/20250412_195040-MotionTracking_CR7-motion_tracking-g1_29dof_anneal_23dof/exported/model_5000.onnx"
+        # self.policy_path = "logs/MotionTracking/20250416_090608-MotionTracking_motion3-motion_tracking-g1_29dof_anneal_23dof/exported/model_41200.onnx" # vuon vai ok
         # self.policy_path = "logs/MotionTracking/20250416_115313-MotionTracking_motion2-motion_tracking-g1_29dof_anneal_23dof/exported/model_49600.onnx"
-        # self.policy_path = "logs/MotionTracking/20250417_111523-khuyen_vai-motion_tracking-g1_29dof_anneal_23dof/exported/model_35000.onnx"
+        # self.policy_path = "logs/MotionTracking/20250417_111523-khuyen_vai-motion_tracking-g1_29dof_anneal_23dof/exported/model_35000.onnx" # ok
         # self.policy_path = "logs/MotionTracking/20250417_111501-cuc_go-motion_tracking-g1_29dof_anneal_23dof/exported/model_54500.onnx"
         # self.policy_path = "logs/MotionTracking/20250418_115620-cuc-motion_tracking-g1_29dof_anneal_23dof/exported/model_34000.onnx"
         # self.policy_path = "logs/MotionTracking/20250418_134949-khuyen_lai-motion_tracking-g1_29dof_anneal_23dof/exported/model_36600.onnx"
         # self.policy_path = "logs/MotionTracking/20250421_102644-hieu-motion_tracking-g1_29dof_anneal_23dof/exported/model_124700.onnx"
-        # self.policy_path = "/home/rtx3/khai/ASAP/logs/MotionTracking/20250424_230817-dance1-motion_tracking-g1_29dof_anneal_23dof_vr/exported/model_27900.onnx"
-        self.policy_path = "logs/MotionTracking/20250509_210330-sport38-motion_tracking-g1_29dof_anneal_23dof_vr/model_113000.pt"
+        # self.policy_path = "/home/rtx3/khai/ASAP/logs/MotionTracking/20250424_230817-dance1-motion_tracking-g1_29dof_anneal_23dof_vr/exported/model_27900.onnx" # ok
+        # self.policy_path = "logs/MotionTracking/20250425_145000-dance2-motion_tracking-g1_29dof_anneal_23dof_vr/exported/model_133400.onnx" # ok
+        self.policy_path = "logs/MotionTracking/20250509_210330-sport38-motion_tracking-g1_29dof_anneal_23dof_vr/exported/model_113000.onnx"
 
         self.leg_joint2motor_idx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         self.kps = [100, 100, 100, 200, 40, 20, 100, 100, 100, 200, 45, 20]
@@ -487,9 +489,12 @@ class ASAPController:
 
         # imu_state quaternion: w, x, y, z
         quat = self.low_state.imu_state.quaternion
-        rotation_quaternion = R.from_euler('y', 0.0).as_quat()  # ('x', angle) creates a rotation quaternion
-        rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
-        quat = rotated_quaternion.as_quat()
+        # rotation_quaternion = R.from_euler('y', 0.0).as_quat()  # ('x', angle) creates a rotation quaternion
+        # rotated_quaternion = R.from_quat(rotation_quaternion) * R.from_quat(quat)
+        # quat = rotated_quaternion.as_quat()
+
+        print(quat)
+        print(self.low_state.imu_state.accelerometer)
 
         ang_vel = np.array(self.low_state.imu_state.gyroscope, dtype=np.float32)
            
@@ -502,7 +507,7 @@ class ASAPController:
         ang_vel = ang_vel * self.config.ang_vel_scale
         lin_vel = ang_vel * 0.0
 
-        if "cr7" in self.config.policy_path:
+        if "CR7" in self.config.policy_path:
             motion_length = 3.933
         if "test" in self.config.policy_path:
             motion_length = 3.967
